@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trolley Problem Game - Simple Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .ui-element {
+            pointer-events: auto;
+        }
+        
+        #error-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 400px;
+            display: none;
+        }
+        
+        #status-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui-overlay">
+            <div id="error-display"></div>
+            <div id="status-display">Initializing...</div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+        
+        // Simple game initialization without complex systems
+        console.log('Starting simple game test...');
+        
+        const canvas = document.getElementById('gameCanvas');
+        const statusDisplay = document.getElementById('status-display');
+        const errorDisplay = document.getElementById('error-display');
+        
+        function updateStatus(message) {
+            statusDisplay.textContent = message;
+            console.log(message);
+        }
+        
+        function showError(message) {
+            errorDisplay.textContent = message;
+            errorDisplay.style.display = 'block';
+            console.error(message);
+        }
+        
+        try {
+            updateStatus('Creating Three.js scene...');
+            
+            // Create basic Three.js setup
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue
+            
+            // Create isometric camera
+            const aspect = window.innerWidth / window.innerHeight;
+            const frustumSize = 20;
+            const camera = new THREE.OrthographicCamera(
+                frustumSize * aspect / -2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                frustumSize / -2,
+                0.1,
+                1000
+            );
+            
+            // Position camera for isometric view
+            camera.position.set(15, 15, 15);
+            camera.lookAt(0, 0, 0);
+            
+            // Create renderer
+            const renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            updateStatus('Adding basic lighting...');
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            updateStatus('Creating test objects...');
+            
+            // Create a simple ground plane
+            const groundGeometry = new THREE.PlaneGeometry(50, 50);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // Create some test tracks
+            const trackMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            for (let i = 0; i < 5; i++) {
+                const trackGeometry = new THREE.BoxGeometry(1.5, 0.1, 20);
+                const track = new THREE.Mesh(trackGeometry, trackMaterial);
+                track.position.set((i - 2) * 2, 0.05, 0);
+                track.castShadow = true;
+                scene.add(track);
+            }
+            
+            // Create a simple trolley
+            const trolleyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+            const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
+            const trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+            trolley.position.set(0, 0.5, -5);
+            trolley.castShadow = true;
+            scene.add(trolley);
+            
+            updateStatus('Starting animation loop...');
+            
+            // Animation variables
+            let trolleySpeed = 2;
+            let frameCount = 0;
+            
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                frameCount++;
+                
+                // Move trolley forward
+                trolley.position.z += trolleySpeed * 0.016; // Assuming ~60fps
+                
+                // Reset trolley position when it goes too far
+                if (trolley.position.z > 15) {
+                    trolley.position.z = -15;
+                }
+                
+                // Update status every 60 frames
+                if (frameCount % 60 === 0) {
+                    const fps = Math.round(1000 / 16.67); // Approximate FPS
+                    updateStatus(`Game running - FPS: ~${fps}, Trolley Z: ${trolley.position.z.toFixed(1)}`);
+                }
+                
+                renderer.render(scene, camera);
+            }
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                const aspect = window.innerWidth / window.innerHeight;
+                camera.left = frustumSize * aspect / -2;
+                camera.right = frustumSize * aspect / 2;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            
+            // Start the animation
+            animate();
+            
+            updateStatus('Game initialized successfully!');
+            
+        } catch (error) {
+            showError(`Initialization failed: ${error.message}`);
+        }
+    </script>
+</body>
+</html>

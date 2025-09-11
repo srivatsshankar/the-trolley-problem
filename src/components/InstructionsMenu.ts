@@ -1,0 +1,185 @@
+/**
+ * InstructionsMenu - Instructions/how to play menu for the game
+ */
+
+export class InstructionsMenu {
+  private container: HTMLElement;
+  private isVisible: boolean = false;
+  private onBack?: () => void;
+
+  constructor() {
+    this.container = this.createInstructionsContainer();
+  }
+
+  private createInstructionsContainer(): HTMLElement {
+    const container = document.createElement('div');
+    container.id = 'instructions-menu';
+    container.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Arial', sans-serif;
+      color: white;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+      overflow-y: auto;
+      padding: 2rem;
+      box-sizing: border-box;
+    `;
+
+    // Title
+    const title = document.createElement('h2');
+    title.textContent = 'How to Play';
+    title.style.cssText = `
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+      text-align: center;
+    `;
+
+    // Instructions content
+    const contentContainer = document.createElement('div');
+    contentContainer.style.cssText = `
+      max-width: 600px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2rem;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    `;
+
+    const instructions = [
+      {
+        title: 'The Trolley Problem',
+        content: 'You are in control of a runaway trolley speeding down the tracks. Ahead, you see people on the tracks who will be harmed if you do nothing.'
+      },
+      {
+        title: 'Your Choice',
+        content: 'You can pull a lever to divert the trolley to a different track, but this track also has people on it. You must make a split-second moral decision.'
+      },
+      {
+        title: 'Controls',
+        content: 'Use your mouse to click the lever when you want to switch tracks. You have limited time to make your decision before the trolley reaches the people.'
+      },
+      {
+        title: 'Moral Dilemma',
+        content: 'There is no "right" answer. This game explores the philosophical question: Is it morally acceptable to actively cause harm to prevent greater harm?'
+      }
+    ];
+
+    instructions.forEach(instruction => {
+      const section = document.createElement('div');
+      section.style.marginBottom = '1.5rem';
+
+      const sectionTitle = document.createElement('h3');
+      sectionTitle.textContent = instruction.title;
+      sectionTitle.style.cssText = `
+        font-size: 1.3rem;
+        margin-bottom: 0.5rem;
+        color: #FFD700;
+      `;
+
+      const sectionContent = document.createElement('p');
+      sectionContent.textContent = instruction.content;
+      sectionContent.style.cssText = `
+        margin: 0;
+        opacity: 0.9;
+      `;
+
+      section.appendChild(sectionTitle);
+      section.appendChild(sectionContent);
+      contentContainer.appendChild(section);
+    });
+
+    // Back button
+    const backButton = this.createButton('Back to Menu', () => {
+      this.onBack?.();
+    });
+
+    container.appendChild(title);
+    container.appendChild(contentContainer);
+    container.appendChild(backButton);
+
+    return container;
+  }
+
+  private createButton(text: string, onClick: () => void): HTMLElement {
+    const button = document.createElement('button');
+    button.textContent = text;
+    button.style.cssText = `
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    `;
+
+    button.addEventListener('mouseenter', () => {
+      button.style.background = 'rgba(255, 255, 255, 0.2)';
+      button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+      button.style.transform = 'translateY(-2px)';
+    });
+
+    button.addEventListener('mouseleave', () => {
+      button.style.background = 'rgba(255, 255, 255, 0.1)';
+      button.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+      button.style.transform = 'translateY(0)';
+    });
+
+    button.addEventListener('click', onClick);
+
+    return button;
+  }
+
+  public show(): void {
+    if (!this.container.parentElement) {
+      document.body.appendChild(this.container);
+    }
+    
+    setTimeout(() => {
+      this.container.style.opacity = '1';
+    }, 50);
+    
+    this.isVisible = true;
+  }
+
+  public isMenuVisible(): boolean {
+    return this.isVisible;
+  }
+
+  public hide(): void {
+    this.container.style.opacity = '0';
+    
+    setTimeout(() => {
+      if (this.container.parentElement) {
+        this.container.parentElement.removeChild(this.container);
+      }
+    }, 500);
+    
+    this.isVisible = false;
+  }
+
+  public onBackCallback(callback: () => void): void {
+    this.onBack = callback;
+  }
+
+  public dispose(): void {
+    if (this.container.parentElement) {
+      this.container.parentElement.removeChild(this.container);
+    }
+    this.isVisible = false;
+  }
+}
