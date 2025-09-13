@@ -54,7 +54,7 @@ describe('TrackGenerator', () => {
       tracks: {
         count: 5,
         width: 2.0,
-        segmentLength: 10.0,
+        segmentLength: 25.0,
       },
       rendering: {
         maxVisibleSegments: 8,
@@ -158,7 +158,7 @@ describe('TrackGenerator', () => {
     it('should generate segments ahead of current position', () => {
       trackGenerator.initialize();
       
-      const currentPosition = new THREE.Vector3(0, 0, 25); // Middle of segment 2
+      const currentPosition = new THREE.Vector3(0, 0, 62.5); // Middle of segment 2 (25 * 2.5)
       trackGenerator.updateGeneration(currentPosition);
       
       const stats = trackGenerator.getGenerationStats();
@@ -259,7 +259,7 @@ describe('TrackGenerator', () => {
     });
 
     it('should get segment at specific Z position', () => {
-      const z = 25; // Should be in segment 2
+      const z = 62.5; // Should be in segment 2 (25 * 2.5)
       const segment = trackGenerator.getSegmentAtPosition(z);
       
       expect(segment).toBeDefined();

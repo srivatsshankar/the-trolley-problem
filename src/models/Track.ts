@@ -197,7 +197,7 @@ export class Track {
  */
 export const DEFAULT_TRACK_CONFIG: TrackConfig = {
   width: 2.0,
-  length: 10.0,
+  length: 25.0, // Updated to match new segment length
   height: 0.2,
   color: 0x4169E1,      // Royal blue - bright and vivid
   emissive: 0x001122,   // Slight blue glow

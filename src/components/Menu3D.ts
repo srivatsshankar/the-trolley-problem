@@ -473,20 +473,31 @@ export class Menu3D {
   }
 
   /**
-   * Create 3D button geometry with simple box and lighting-based shadows
+   * Create 3D button geometry with game-style appearance
    */
   private create3DButtonGeometry(): THREE.Mesh {
-    // Thicker 3D box geometry with increased depth
-  const geometry = new THREE.BoxGeometry(6.2, 1.6, 1.2); // Much larger and thicker button
-    const material = new THREE.MeshPhongMaterial({
-      color: 0xFF4444, // Start with brighter red as default
-      shininess: 30,
-      specular: 0x222222
+    // Create rounded button geometry to match game buttons
+    const geometry = new THREE.BoxGeometry(6.2, 1.6, 0.3); // Thinner depth like game buttons
+    
+    // Create gradient-like material to match game button styling
+    const material = new THREE.MeshLambertMaterial({
+      color: 0xFF4444, // Bright red like game buttons
+      transparent: false
     });
 
     const button = new THREE.Mesh(geometry, material);
     button.castShadow = true;
     button.receiveShadow = true;
+
+    // Add border effect by creating a slightly larger red border mesh
+    const borderGeometry = new THREE.BoxGeometry(6.3, 1.7, 0.25);
+    const borderMaterial = new THREE.MeshLambertMaterial({
+      color: 0xCC2222, // Lighter red border (lighter than main button color)
+      transparent: false
+    });
+    const borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
+    borderMesh.position.z = -0.05; // Behind the main button
+    button.add(borderMesh);
 
     return button;
   }

@@ -104,7 +104,7 @@ describe('Game Systems Integration Tests', () => {
       tracks: {
         count: 5,
         width: 2.0,
-        segmentLength: 10.0,
+        segmentLength: 25.0,
       },
       trolley: {
         baseSpeed: 5.0,

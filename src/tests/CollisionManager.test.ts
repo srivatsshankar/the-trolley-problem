@@ -32,7 +32,7 @@ describe('CollisionManager', () => {
 
     // Create mock trolley controller
     const mockConfig: GameConfig = {
-      tracks: { count: 5, width: 2, segmentLength: 10 },
+      tracks: { count: 5, width: 2, segmentLength: 25 },
       trolley: { baseSpeed: 5, speedIncrease: 0.03, maxSpeedMultiplier: 5 },
       difficulty: { minPeoplePerTrack: 1, maxPeoplePerTrack: 5, barrierIncreaseThreshold: 5 }
     };

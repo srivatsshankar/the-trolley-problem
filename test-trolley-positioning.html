@@ -48,6 +48,9 @@
             <div>Current Track: <span id="currentTrack">Loading...</span></div>
             <div>Target Track: <span id="targetTrack">Loading...</span></div>
             <div>Is Transitioning: <span id="transitioning">Loading...</span></div>
+            <div>Current Segment: <span id="currentSegment">Loading...</span></div>
+            <div>Segment Progress: <span id="segmentProgress">Loading...</span></div>
+            <div>Segment Length: <span id="segmentLength">Loading...</span></div>
             <div>Track Positions: <span id="trackPositions">Loading...</span></div>
         </div>
     </div>
@@ -98,7 +101,8 @@
         }
 
         // Position camera to view the tracks from an isometric angle
-        camera.position.set(0, 15, 10);
+        // Moved back to see longer tracks
+        camera.position.set(0, 20, 15);
         camera.lookAt(0, 0, 0);
 
         // Global functions for buttons
@@ -114,12 +118,17 @@
         function updateInfo() {
             const state = trolleyController.getState();
             const trackPositions = trolleyController.getTrackPositions();
+            const currentSegment = trackGenerator.getCurrentSegmentIndex(state.position);
+            const segmentProgress = trackGenerator.getSegmentProgress(state.position);
             
             document.getElementById('position').textContent = 
                 `(${state.position.x.toFixed(2)}, ${state.position.y.toFixed(2)}, ${state.position.z.toFixed(2)})`;
             document.getElementById('currentTrack').textContent = state.currentTrack;
             document.getElementById('targetTrack').textContent = state.targetTrack;
             document.getElementById('transitioning').textContent = state.isTransitioning;
+            document.getElementById('currentSegment').textContent = currentSegment;
+            document.getElementById('segmentProgress').textContent = `${(segmentProgress * 100).toFixed(1)}%`;
+            document.getElementById('segmentLength').textContent = `${DEFAULT_CONFIG.tracks.segmentLength} units`;
             document.getElementById('trackPositions').textContent = 
                 trackPositions.map((pos, i) => `Track ${i+1}: ${pos.toFixed(2)}`).join(', ');
         }

@@ -225,7 +225,7 @@ describe('InputManager', () => {
     
     // Move trolley far ahead
     const segmentLength = DEFAULT_CONFIG.tracks.segmentLength;
-    trolleyController.setPosition(new THREE.Vector3(0, 0, segmentLength * 10));
+    trolleyController.setPosition(new THREE.Vector3(0, 0, segmentLength * 4)); // Adjusted for longer segments
     
     // Update to trigger cleanup
     inputManager.update(0.016);

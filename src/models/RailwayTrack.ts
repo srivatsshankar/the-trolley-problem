@@ -241,7 +241,7 @@ export class RailwayTrack {
  * Default railway track configuration
  */
 export const DEFAULT_RAILWAY_CONFIG: RailwayTrackConfig = {
-  length: 10.0,
+  length: 25.0, // Updated to match new segment length
   railWidth: 0.15,
   railHeight: 0.2,
   railSpacing: 1.435, // Standard gauge (1435mm)

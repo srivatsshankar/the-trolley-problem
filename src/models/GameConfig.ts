@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   tracks: {
     count: 5,
     width: 2.0,
-    segmentLength: 10.0
+    segmentLength: 25.0 // Increased by 2.5x for smoother gameplay
   },
   trolley: {
     baseSpeed: 5.0,
@@ -55,8 +55,8 @@ export const DEFAULT_CONFIG: GameConfig = {
     highSpeedMaxBarriers: 4
   },
   rendering: {
-    viewDistance: 100.0,
-    maxVisibleSegments: 10
+    viewDistance: 150.0, // Increased for longer segments
+    maxVisibleSegments: 8 // Fewer segments needed due to increased length
   },
   scoring: {
     pointsPerPersonAvoided: 1,

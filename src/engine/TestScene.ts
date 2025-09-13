@@ -95,7 +95,7 @@ export class TestScene {
      */
     private createTestTracks(): void {
         const trackWidth = 1.5;
-        const trackLength = 10;
+        const trackLength = 25; // Updated to match new segment length
         const trackSpacing = 2;
         
         // Create 5 parallel tracks

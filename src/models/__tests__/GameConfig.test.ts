@@ -14,7 +14,7 @@ describe('GameConfig', () => {
       
       expect(config.tracks.count).toBe(5);
       expect(config.tracks.width).toBe(2.0);
-      expect(config.tracks.segmentLength).toBe(10.0);
+      expect(config.tracks.segmentLength).toBe(25.0);
       
       expect(config.trolley.baseSpeed).toBe(5.0);
       expect(config.trolley.speedIncrease).toBe(0.03); // 3% (Requirement 7.1)

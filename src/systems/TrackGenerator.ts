@@ -56,16 +56,18 @@ export class TrackGenerator {
   /**
    * Generate initial track segments
    * Requirement 3.1: Start with single track, then split into 5 tracks
+   * Generate extra segments upfront to ensure smooth gameplay
    */
   public initialize(): void {
     this.log('Generating initial track segments...');
     
-    // Generate initial segments
-    for (let i = 0; i < this.generationConfig.maxVisibleSegments; i++) {
+    // Generate more initial segments to create a buffer
+    const initialSegmentCount = this.generationConfig.maxVisibleSegments + 5; // Extra buffer
+    for (let i = 0; i < initialSegmentCount; i++) {
       this.generateSegment(i);
     }
     
-    this.log(`Generated ${this.segments.size} initial segments`);
+    this.log(`Generated ${this.segments.size} initial segments with buffer`);
   }
 
   /**
@@ -132,7 +134,10 @@ export class TrackGenerator {
     trackPosition.x = 0; // Center position matches track 3 in multi-track layout
     trackPosition.y = 0;
     
-    const track = createTrack(trackId, trackPosition, 'NORMAL');
+    // Create track with segment length to fill entire segment
+    const track = createTrack(trackId, trackPosition, 'NORMAL', {
+      length: this.gameConfig.tracks.segmentLength
+    });
     return [track];
   }
 
@@ -156,7 +161,10 @@ export class TrackGenerator {
       trackPosition.x = startX + (i * trackSpacing);
       trackPosition.y = 0;
       
-      const track = createTrack(trackId, trackPosition, 'NORMAL');
+      // Create track with segment length to fill entire segment
+      const track = createTrack(trackId, trackPosition, 'NORMAL', {
+        length: this.gameConfig.tracks.segmentLength
+      });
       tracks.push(track);
     }
     
@@ -166,25 +174,43 @@ export class TrackGenerator {
   /**
   * Progressive track generation based on camera/trolley position
    * Requirement 7.3: Progressive generation
+   * Improved with buffer zone to prevent pauses during gameplay
    */
   public updateGeneration(currentPosition: THREE.Vector3): void {
     const currentZ = currentPosition.z;
     const segmentLength = this.gameConfig.tracks.segmentLength;
     const currentSegment = Math.floor(currentZ / segmentLength);
     
-    // Generate ahead segments
-    const generateAhead = Math.ceil(this.generationConfig.maxVisibleSegments / 2);
+    // Calculate progress within current segment (0.0 to 1.0)
+    const segmentProgress = (currentZ % segmentLength) / segmentLength;
+    
+    // Generate ahead segments with buffer zone
+    // Start generating when 60% through current segment to avoid pauses
+    const bufferZoneThreshold = 0.6;
+    const baseGenerateAhead = Math.ceil(this.generationConfig.maxVisibleSegments / 2);
+    
+    // Add extra lookahead when approaching segment boundary
+    const extraLookahead = segmentProgress > bufferZoneThreshold ? 2 : 0;
+    const generateAhead = baseGenerateAhead + extraLookahead;
+    
     const maxSegmentToGenerate = currentSegment + generateAhead;
     
-    for (let i = this.lastGeneratedSegment + 1; i <= maxSegmentToGenerate; i++) {
+    // Generate segments in batches to spread load across frames
+    const maxGenerationsPerFrame = 2;
+    let generationsThisFrame = 0;
+    
+    for (let i = this.lastGeneratedSegment + 1; i <= maxSegmentToGenerate && generationsThisFrame < maxGenerationsPerFrame; i++) {
       this.generateSegment(i);
+      generationsThisFrame++;
     }
     
-    // Update visibility
+    // Update visibility (lightweight operation)
     this.updateSegmentVisibility(currentPosition);
     
-    // Cleanup old segments
-    this.cleanupOldSegments(currentPosition);
+    // Cleanup old segments (only when needed to avoid frame drops)
+    if (segmentProgress < 0.1) { // Only cleanup at start of segments
+      this.cleanupOldSegments(currentPosition);
+    }
   }
 
   /**
@@ -372,6 +398,58 @@ export class TrackGenerator {
     
     this.segments.clear();
     this.log('TrackGenerator disposed');
+  }
+
+  /**
+   * Pre-generate segments asynchronously to avoid frame drops
+   * This method can be called during idle time or in a web worker
+   */
+  public preGenerateSegments(startSegment: number, count: number): void {
+    const endSegment = startSegment + count;
+    
+    // Use requestIdleCallback if available, otherwise setTimeout
+    const generateBatch = (batchStart: number, batchSize: number = 1) => {
+      const batchEnd = Math.min(batchStart + batchSize, endSegment);
+      
+      for (let i = batchStart; i < batchEnd; i++) {
+        if (!this.segments.has(i)) {
+          this.generateSegment(i);
+        }
+      }
+      
+      // Continue with next batch if more segments to generate
+      if (batchEnd < endSegment) {
+        if ('requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(() => generateBatch(batchEnd, batchSize));
+        } else {
+          setTimeout(() => generateBatch(batchEnd, batchSize), 0);
+        }
+      }
+    };
+    
+    generateBatch(startSegment);
+  }
+
+  /**
+   * Get the current segment index based on position
+   */
+  public getCurrentSegmentIndex(position: THREE.Vector3): number {
+    return Math.floor(position.z / this.gameConfig.tracks.segmentLength);
+  }
+
+  /**
+   * Get progress within current segment (0.0 to 1.0)
+   */
+  public getSegmentProgress(position: THREE.Vector3): number {
+    const segmentLength = this.gameConfig.tracks.segmentLength;
+    return (position.z % segmentLength) / segmentLength;
+  }
+
+  /**
+   * Check if we're approaching a segment boundary (for input handling)
+   */
+  public isApproachingSegmentBoundary(position: THREE.Vector3, threshold: number = 0.8): boolean {
+    return this.getSegmentProgress(position) > threshold;
   }
 
   /**
