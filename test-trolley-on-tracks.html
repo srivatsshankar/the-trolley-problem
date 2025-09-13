@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trolley on Tracks Test - Fixed Positioning</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div>Trolley on Tracks Test - FIXED POSITIONING</div>
+        <div>✓ Trolley now sits properly on top of railway tracks</div>
+        <div>✓ No intersection between trolley and rails</div>
+        <div>✓ Proper height calculation: rail top (0.25) + wheel height (0.125)</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { createRailwayTrack } from './src/models/RailwayTrack.js';
+
+        let scene, camera, renderer, trolleyModel;
+
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(5, 3, 5);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);            
+// Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Create ground
+            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Create railway track
+            const railwayTrack = createRailwayTrack(1, new THREE.Vector3(0, 0, 0), 'NORMAL', {
+                length: 15
+            });
+            scene.add(railwayTrack.group);
+
+            // Create enhanced trolley with fixed positioning
+            import('./dist/assets/index-66c00775.js').then(({ createTrolley }) => {
+                trolleyModel = createTrolley();
+                const trolleyGroup = trolleyModel.getGroup();
+                trolleyGroup.position.set(0, 0, 0); // Trolley auto-positions on rails
+                scene.add(trolleyGroup);
+                console.log('Trolley positioned at:', trolleyGroup.position);
+                console.log('Rail top height: 0.25, Trolley base height:', trolleyGroup.position.y);
+            }).catch(error => {
+                console.error('Error loading trolley:', error);
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (trolleyModel) {
+                trolleyModel.update(0.016, 1.0);
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+        animate();
+    </script>
+</body>
+</html>

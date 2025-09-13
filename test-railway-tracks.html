@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Railway Tracks Test - Trolley Problem Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        <div>Railway Tracks Test - IMPROVED</div>
+        <div>Realistic railway tracks with metal rails and wooden ties</div>
+        <div>5 parallel tracks with proper spacing and continuous grass</div>
+        <div>Fixed: Better track separation, larger ground plane</div>
+    </div>
+
+    <script type="module">
+        import { createRailwayTrack } from './src/models/RailwayTrack.js';
+        import * as THREE from 'three';
+
+        console.log('Railway Tracks Test - Starting...');
+
+        // Get canvas element
+        const canvas = document.getElementById('gameCanvas');
+
+        // Three.js setup
+        let scene, camera, renderer;
+
+        function initializeThreeJS() {
+            console.log('Initializing Three.js...');
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create isometric camera
+            const aspect = window.innerWidth / window.innerHeight;
+            const frustumSize = 30;
+            camera = new THREE.OrthographicCamera(
+                frustumSize * aspect / -2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                frustumSize / -2,
+                0.1,
+                1000
+            );
+
+            // Position camera for better view
+            camera.position.set(20, 20, 20);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            console.log('Three.js initialized successfully!');
+        }
+
+        function createTestTracks() {
+            console.log('Creating railway tracks...');
+
+            // Create ground
+            const groundGeometry = new THREE.PlaneGeometry(200, 200);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Create 5 parallel railway tracks with improved spacing
+            const trackSpacing = 4; // Increased from 3 to 4 for better separation
+            for (let i = 0; i < 5; i++) {
+                const trackPosition = new THREE.Vector3((i - 2) * trackSpacing, 0, 0);
+                
+                // Create different colored tracks for variety
+                let colorType = 'NORMAL';
+                if (i === 2) colorType = 'SELECTED'; // Middle track highlighted
+                if (i === 0 || i === 4) colorType = 'DANGER'; // Outer tracks as danger
+                
+                const railwayTrack = createRailwayTrack(i, trackPosition, colorType, {
+                    length: 30
+                });
+                
+                scene.add(railwayTrack.group);
+                console.log(`Created railway track ${i} at position:`, trackPosition);
+            }
+
+            // Create enhanced trolley with proper positioning
+            let trolleyModel;
+            try {
+                // Try to import and use the enhanced trolley from the built bundle
+                import('./dist/assets/index-66c00775.js').then(({ createTrolley }) => {
+                    trolleyModel = createTrolley();
+                    const trolleyGroup = trolleyModel.getGroup();
+                    trolleyGroup.position.set(0, 0, -10); // The trolley will auto-position itself on the rails
+                    scene.add(trolleyGroup);
+                    console.log('Enhanced trolley created successfully! Position:', trolleyGroup.position);
+                }).catch(error => {
+                    console.warn('Could not load enhanced trolley, using fallback:', error);
+                    // Fallback to simple trolley - position it correctly on rails
+                    const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+                    const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+                    const trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+                    // Position fallback trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+                    trolley.position.set(0, 0.75, -10);
+                    trolley.castShadow = true;
+                    scene.add(trolley);
+                    console.log('Fallback trolley positioned at:', trolley.position);
+                });
+            } catch (error) {
+                console.warn('Could not load enhanced trolley, using fallback:', error);
+                // Fallback to simple trolley - position it correctly on rails
+                const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+                const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+                const trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+                // Position fallback trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+                trolley.position.set(0, 0.75, -10);
+                trolley.castShadow = true;
+                scene.add(trolley);
+                console.log('Fallback trolley positioned at:', trolley.position);
+            }
+
+            console.log('Railway tracks created successfully!');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update trolley animation if available
+            if (trolleyModel) {
+                trolleyModel.update(0.016, 2.0); // 60 FPS delta time, speed 2.0
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                const aspect = window.innerWidth / window.innerHeight;
+                const frustumSize = 30;
+                camera.left = frustumSize * aspect / -2;
+                camera.right = frustumSize * aspect / 2;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // Initialize and start
+        initializeThreeJS();
+        createTestTracks();
+        animate();
+    </script>
+</body>
+</html>

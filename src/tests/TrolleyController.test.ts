@@ -13,18 +13,31 @@ vi.mock('three', async () => {
   const actual = await vi.importActual('three');
   return {
     ...actual,
-    Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => ({
-      x, y, z,
-      clone: vi.fn().mockReturnThis(),
-      copy: vi.fn().mockReturnThis(),
-      set: vi.fn().mockReturnThis(),
-      add: vi.fn().mockReturnThis(),
-      sub: vi.fn().mockReturnThis(),
-      multiplyScalar: vi.fn().mockReturnThis(),
-      length: vi.fn().mockReturnValue(1),
-      normalize: vi.fn().mockReturnThis(),
-      distanceTo: vi.fn().mockReturnValue(1),
-    })),
+    Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => {
+      const vector = { x, y, z };
+      return {
+        ...vector,
+        clone: vi.fn(() => new (THREE as any).Vector3(vector.x, vector.y, vector.z)),
+        copy: vi.fn((other) => {
+          vector.x = other.x;
+          vector.y = other.y;
+          vector.z = other.z;
+          return vector;
+        }),
+        set: vi.fn((newX, newY, newZ) => {
+          vector.x = newX;
+          vector.y = newY;
+          vector.z = newZ;
+          return vector;
+        }),
+        add: vi.fn().mockReturnThis(),
+        sub: vi.fn().mockReturnThis(),
+        multiplyScalar: vi.fn().mockReturnThis(),
+        length: vi.fn().mockReturnValue(1),
+        normalize: vi.fn().mockReturnThis(),
+        distanceTo: vi.fn().mockReturnValue(1),
+      };
+    }),
     MathUtils: {
       lerp: vi.fn((a, b, t) => a + (b - a) * t),
     },
@@ -66,17 +79,24 @@ describe('TrolleyController', () => {
       },
       trolley: {
         baseSpeed: 5.0,
-        speedIncrease: 0.03, // 3% increase per segment
+  speedIncrease: 0.0103, // 1.03% increase per segment
         maxSpeedMultiplier: 5.0,
       },
       difficulty: {
         minPeoplePerTrack: 1,
         maxPeoplePerTrack: 5,
+        guaranteedSinglePersonTrack: true,
         barrierIncreaseThreshold: 5.0,
+        highSpeedMinBarriers: 2,
+        highSpeedMaxBarriers: 4
       },
       rendering: {
         viewDistance: 50.0,
         maxVisibleSegments: 10,
+      },
+      scoring: {
+        pointsPerPersonAvoided: 1,
+        pointsPerPersonHit: -1
       },
     };
 
@@ -154,30 +174,31 @@ describe('TrolleyController', () => {
   });
 
   describe('Speed Management', () => {
-    it('should increase speed by 3% per segment', () => {
+    it('should increase speed by ~1.03% per segment', () => {
       const initialSpeed = trolleyController.speed;
       
       trolleyController.increaseSpeed();
-      expect(trolleyController.speed).toBeCloseTo(initialSpeed * 1.03, 5);
+      expect(trolleyController.speed).toBeCloseTo(initialSpeed * 1.0103, 5);
       expect(trolleyController.segmentsPassed).toBe(1);
       
       trolleyController.increaseSpeed();
-      expect(trolleyController.speed).toBeCloseTo(initialSpeed * Math.pow(1.03, 2), 5);
+      expect(trolleyController.speed).toBeCloseTo(initialSpeed * Math.pow(1.0103, 2), 5);
       expect(trolleyController.segmentsPassed).toBe(2);
     });
 
     it('should calculate speed multiplier correctly', () => {
       expect(trolleyController.getSpeedMultiplier()).toBe(1.0);
       
-      trolleyController.increaseSpeed();
-      expect(trolleyController.getSpeedMultiplier()).toBeCloseTo(1.03, 5);
+  trolleyController.increaseSpeed();
+  expect(trolleyController.getSpeedMultiplier()).toBeCloseTo(1.0103, 5);
       
       // Increase speed multiple times to reach high speed
-      for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 400; i++) {
         trolleyController.increaseSpeed();
       }
       
-      expect(trolleyController.getSpeedMultiplier()).toBeGreaterThan(4.0);
+  expect(trolleyController.getSpeedMultiplier()).toBeLessThanOrEqual(5.0);
+  expect(trolleyController.getSpeedMultiplier()).toBeCloseTo(5.0, 2);
     });
 
     it('should detect high-speed threshold correctly', () => {
@@ -248,6 +269,7 @@ describe('TrolleyController', () => {
       trolleyController.setPosition(newPosition);
       
       const position = trolleyController.position;
+      // X position should be set as requested (for testing purposes)
       expect(position.x).toBe(5);
       expect(position.y).toBe(2);
       expect(position.z).toBe(10);
@@ -289,7 +311,7 @@ describe('TrolleyController', () => {
       const position = trolleyController.position;
       expect(position.x).toBe(trolleyController.getTrackPosition(1));
       expect(position.y).toBe(0);
-      expect(position.z).toBe(0);
+      expect(position.z).toBe(2); // Start on the first track segment
     });
   });
 

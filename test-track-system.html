@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track System Test - Trolley Problem Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        <div>Track System Test</div>
+        <div>Trolley starts on single track, then splits into 5 tracks</div>
+        <div>Watch the console for track generation logs</div>
+        <div>Press SPACE to start/stop trolley movement</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TrackGenerator } from './src/systems/TrackGenerator.js';
+        import { DEFAULT_CONFIG } from './src/models/GameConfig.js';
+
+        console.log('Track System Test - Starting...');
+
+        // Get canvas element
+        const canvas = document.getElementById('gameCanvas');
+
+        // Three.js setup
+        let scene, camera, renderer, trolley, trackGenerator;
+        let trolleySpeed = 2;
+        let frameCount = 0;
+        let isMoving = false;
+
+        function initializeThreeJS() {
+            console.log('Initializing Three.js...');
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create isometric camera
+            const aspect = window.innerWidth / window.innerHeight;
+            const frustumSize = 30;
+            camera = new THREE.OrthographicCamera(
+                frustumSize * aspect / -2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                frustumSize / -2,
+                0.1,
+                1000
+            );
+
+            // Position camera for better view of track transition
+            camera.position.set(20, 20, 20);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            console.log('Three.js initialized successfully!');
+        }
+
+        function initializeGame() {
+            console.log('Initializing track system test...');
+
+            // Create ground - larger to cover all track areas
+            const groundGeometry = new THREE.PlaneGeometry(200, 200);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Initialize track generator
+            trackGenerator = new TrackGenerator(scene, DEFAULT_CONFIG);
+            trackGenerator.initialize();
+
+            // Log initial track generation stats
+            const stats = trackGenerator.getGenerationStats();
+            console.log('Initial track generation:', stats);
+
+            // Create enhanced trolley
+            let trolleyModel;
+            try {
+                // Try to import and use the enhanced trolley
+                import('./dist/models/Trolley.js').then(({ createTrolley }) => {
+                    trolleyModel = createTrolley();
+                    const trolleyGroup = trolleyModel.getGroup();
+                    trolleyGroup.position.set(0, 0, -25);
+                    scene.add(trolleyGroup);
+                    console.log('Enhanced trolley created successfully!');
+                }).catch(error => {
+                    console.warn('Could not load enhanced trolley, using fallback:', error);
+                    // Fallback to simple trolley - position it correctly on rails
+                    const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+                    const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+                    trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+                    // Position fallback trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+                    trolley.position.set(0, 0.75, -25);
+                    trolley.castShadow = true;
+                    scene.add(trolley);
+                });
+            } catch (error) {
+                console.warn('Could not load enhanced trolley, using fallback:', error);
+                // Fallback to simple trolley - position it correctly on rails
+                const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+                const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+                trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+                // Position fallback trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+                trolley.position.set(0, 0.75, -25);
+                trolley.castShadow = true;
+                scene.add(trolley);
+            }
+            scene.add(trolley);
+
+            console.log('Trolley starting position:', trolley.position);
+            console.log('Track split occurs at segment 3, which is Z position:', 3 * DEFAULT_CONFIG.tracks.segmentLength);
+
+            console.log('Track system test initialized successfully!');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            frameCount++;
+
+            // Move trolley if enabled
+            if (isMoving) {
+                if (trolleyModel) {
+                    // Update enhanced trolley
+                    trolleyModel.update(0.016, trolleySpeed);
+                    const trolleyGroup = trolleyModel.getGroup();
+                    trolleyGroup.position.z += trolleySpeed * 0.016;
+
+                    // Update track generation
+                    if (trackGenerator) {
+                        trackGenerator.updateGeneration(trolleyGroup.position);
+                    }
+
+                    // Reset when too far
+                    if (trolleyGroup.position.z > 60) {
+                        trolleyGroup.position.z = -25;
+                    }
+                } else if (trolley) {
+                    // Move simple trolley
+                    trolley.position.z += trolleySpeed * 0.016;
+
+                    // Update track generation
+                    if (trackGenerator) {
+                        trackGenerator.updateGeneration(trolley.position);
+                    }
+
+                    // Reset when too far
+                    if (trolley.position.z > 60) {
+                        trolley.position.z = -25;
+                    }
+                }
+            }
+
+            // Log status every 60 frames
+            if (frameCount % 60 === 0) {
+                let trolleyZ = 'N/A';
+                if (trolleyModel) {
+                    trolleyZ = trolleyModel.getGroup().position.z.toFixed(1);
+                } else if (trolley) {
+                    trolleyZ = trolley.position.z.toFixed(1);
+                }
+                const stats = trackGenerator ? trackGenerator.getGenerationStats() : null;
+                console.log(`Trolley Z: ${trolleyZ}, Moving: ${isMoving}`, stats);
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Handle keyboard input
+        window.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                event.preventDefault();
+                isMoving = !isMoving;
+                console.log('Trolley movement:', isMoving ? 'STARTED' : 'STOPPED');
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                const aspect = window.innerWidth / window.innerHeight;
+                const frustumSize = 30;
+                camera.left = frustumSize * aspect / -2;
+                camera.right = frustumSize * aspect / 2;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // Initialize and start
+        initializeThreeJS();
+        initializeGame();
+        animate();
+    </script>
+</body>
+
+</html>

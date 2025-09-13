@@ -1,9 +1,11 @@
 /**
  * Track class - Represents a single track with Three.js mesh generation
  * Implements requirements: 3.1, 3.2, 3.3, 1.5
+ * Updated to use realistic railway tracks with rails and ties
  */
 
 import * as THREE from 'three';
+import { RailwayTrack, createRailwayTrack, DEFAULT_RAILWAY_CONFIG } from './RailwayTrack';
 
 export interface TrackConfig {
   width: number;
@@ -17,13 +19,13 @@ export interface TrackConfig {
 
 /**
  * Track class handles individual track geometry and rendering
+ * Now uses realistic railway tracks with rails and wooden ties
  */
 export class Track {
   public readonly id: number;
   public readonly position: THREE.Vector3;
-  public readonly mesh: THREE.Mesh;
-  public readonly geometry: THREE.BufferGeometry;
-  public readonly material: THREE.Material;
+  public readonly mesh: THREE.Group; // Changed from Mesh to Group for railway track
+  public readonly railwayTrack: RailwayTrack;
   
   private config: TrackConfig;
   private isDisposed: boolean = false;
@@ -33,63 +35,54 @@ export class Track {
     this.position = position.clone();
     this.config = config;
     
-    // Create geometry and material
-    this.geometry = this.createGeometry();
-    this.material = this.createMaterial();
-    
-    // Create mesh
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.mesh.position.copy(this.position);
-    
-    // Enable shadows for depth perception
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-    
-    // Set user data for identification
-    this.mesh.userData = {
-      type: 'track',
-      id: this.id
-    };
-  }
-
-  /**
-   * Create track geometry with proper dimensions
-   */
-  private createGeometry(): THREE.BufferGeometry {
-    // Create box geometry for the track
-    const geometry = new THREE.BoxGeometry(
-      this.config.width,
-      this.config.height,
-      this.config.length
-    );
-    
-    // Add UV coordinates for texturing if needed
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    
-    return geometry;
-  }
-
-  /**
-   * Create bright, vivid material for cartoonish appearance
-   */
-  private createMaterial(): THREE.Material {
-    return new THREE.MeshStandardMaterial({
-      color: this.config.color,
-      emissive: this.config.emissive,
-      metalness: this.config.metalness,
-      roughness: this.config.roughness,
-      
-      // Enable flat shading for cartoonish look
-      flatShading: false,
-      
-      // Ensure material responds to lighting
-      transparent: false,
-      opacity: 1.0,
-      
-      // Bright, vivid appearance
-      toneMapped: true
+    // Create railway track with realistic rails and ties
+    this.railwayTrack = createRailwayTrack(id, position, this.getColorType(), {
+      length: config.length,
+      railColor: this.getRailColor(),
+      tieColor: this.getTieColor()
     });
+    
+    // Use the railway track group as the mesh
+    this.mesh = this.railwayTrack.group;
+  }
+
+  /**
+   * Get color type based on track color
+   */
+  private getColorType(): 'NORMAL' | 'SELECTED' | 'DANGER' {
+    if (this.config.color === TRACK_COLORS.SELECTED) return 'SELECTED';
+    if (this.config.color === TRACK_COLORS.DANGER) return 'DANGER';
+    return 'NORMAL';
+  }
+
+  /**
+   * Get rail color based on track configuration
+   */
+  private getRailColor(): number {
+    // Map track colors to appropriate rail colors
+    switch (this.config.color) {
+      case TRACK_COLORS.SELECTED:
+        return 0x00AA00; // Dark green for selected
+      case TRACK_COLORS.DANGER:
+        return 0xCC3300; // Dark red for danger
+      default:
+        return DEFAULT_RAILWAY_CONFIG.railColor; // Standard steel gray
+    }
+  }
+
+  /**
+   * Get tie color based on track configuration
+   */
+  private getTieColor(): number {
+    // Map track colors to appropriate tie colors
+    switch (this.config.color) {
+      case TRACK_COLORS.SELECTED:
+        return 0x228B22; // Forest green for selected
+      case TRACK_COLORS.DANGER:
+        return 0x8B0000; // Dark red for danger
+      default:
+        return DEFAULT_RAILWAY_CONFIG.tieColor; // Standard brown wood
+    }
   }
 
   /**
@@ -97,53 +90,49 @@ export class Track {
    */
   public setPosition(newPosition: THREE.Vector3): void {
     this.position.copy(newPosition);
-    this.mesh.position.copy(this.position);
+    this.railwayTrack.setPosition(newPosition);
   }
 
   /**
    * Get track bounds for collision detection
    */
   public getBounds(): THREE.Box3 {
-    const box = new THREE.Box3();
-    box.setFromObject(this.mesh);
-    return box;
+    return this.railwayTrack.getBounds();
   }
 
   /**
    * Get track center point
    */
   public getCenter(): THREE.Vector3 {
-    return this.position.clone();
+    return this.railwayTrack.getCenter();
   }
 
   /**
    * Get track width
    */
   public getWidth(): number {
-    return this.config.width;
+    return this.railwayTrack.getWidth();
   }
 
   /**
    * Get track length
    */
   public getLength(): number {
-    return this.config.length;
+    return this.railwayTrack.getLength();
   }
 
   /**
    * Check if point is on this track
    */
   public containsPoint(point: THREE.Vector3, tolerance: number = 0.1): boolean {
-    const bounds = this.getBounds();
-    bounds.expandByScalar(tolerance);
-    return bounds.containsPoint(point);
+    return this.railwayTrack.containsPoint(point, tolerance);
   }
 
   /**
    * Get distance from point to track center
    */
   public distanceToPoint(point: THREE.Vector3): number {
-    return this.position.distanceTo(point);
+    return this.railwayTrack.distanceToPoint(point);
   }
 
   /**
@@ -154,20 +143,27 @@ export class Track {
     emissive: number;
     opacity: number;
   }>): void {
-    const material = this.material as THREE.MeshStandardMaterial;
-    
-    if (properties.color !== undefined) {
-      material.color.setHex(properties.color);
+    // Update the track config and recreate if color changed
+    if (properties.color !== undefined && properties.color !== this.config.color) {
+      this.config.color = properties.color;
+      
+      // Update railway track colors
+      const railColor = this.getRailColor();
+      const tieColor = this.getTieColor();
+      
+      // Update rail materials
+      this.railwayTrack.group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const material = child.material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial;
+          if (child.userData?.type === 'rail') {
+            material.color.setHex(railColor);
+          } else if (child.userData?.type === 'tie') {
+            material.color.setHex(tieColor);
+          }
+          material.needsUpdate = true;
+        }
+      });
     }
-    if (properties.emissive !== undefined) {
-      material.emissive.setHex(properties.emissive);
-    }
-    if (properties.opacity !== undefined) {
-      material.opacity = properties.opacity;
-      material.transparent = properties.opacity < 1.0;
-    }
-    
-    material.needsUpdate = true;
   }
 
   /**
@@ -183,13 +179,7 @@ export class Track {
   public dispose(): void {
     if (this.isDisposed) return;
     
-    this.geometry.dispose();
-    this.material.dispose();
-    
-    // Remove from parent if it has one
-    if (this.mesh.parent) {
-      this.mesh.parent.remove(this.mesh);
-    }
+    this.railwayTrack.dispose();
     
     this.isDisposed = true;
   }

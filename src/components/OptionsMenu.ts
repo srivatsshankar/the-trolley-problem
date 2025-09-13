@@ -143,25 +143,54 @@ export class OptionsMenu {
     const button = document.createElement('button');
     button.textContent = text;
     button.style.cssText = `
-      background: rgba(255, 255, 255, 0.1);
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      color: white;
-      padding: 1rem 2rem;
-      font-size: 1.1rem;
-      border-radius: 8px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 60%, rgba(255,255,255,0.02) 100%);
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      color: #fff;
+      padding: 1rem 2.2rem;
+      font-size: 1.12rem;
+      border-radius: 14px;
       cursor: pointer;
-      transition: all 0.3s ease;
-      backdrop-filter: blur(10px);
+      transition: transform 0.28s cubic-bezier(.22,1.15,.62,1), box-shadow 0.28s ease, background 0.28s ease, filter 0.28s ease, border-color 0.28s ease;
+      backdrop-filter: blur(14px) brightness(1.05);
+      position: relative;
+      transform-style: preserve-3d;
+      will-change: transform, box-shadow;
+      transform: translateZ(16px) translateY(-6px);
+      box-shadow:
+        0 4px 6px -2px rgba(0,0,0,0.35),
+        0 10px 18px -4px rgba(0,0,0,0.45),
+        0 24px 38px -10px rgba(0,0,0,0.5),
+        inset 0 2px 4px rgba(255,255,255,0.2),
+        inset 0 -3px 6px rgba(0,0,0,0.35);
     `;
 
+    const sheen = document.createElement('span');
+    sheen.style.cssText = `
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      border-radius: inherit;
+      background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.35), rgba(255,255,255,0) 60%);
+      mix-blend-mode: screen;
+      opacity: 0.9;
+      transition: opacity 0.4s ease;
+    `;
+    button.appendChild(sheen);
+
     button.addEventListener('mouseenter', () => {
-      button.style.background = 'rgba(255, 255, 255, 0.2)';
-      button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+      button.style.background = 'linear-gradient(155deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.12) 55%, rgba(255,255,255,0.05) 100%)';
+      button.style.borderColor = 'rgba(255, 255, 255, 0.75)';
+      button.style.transform = 'translateZ(30px) translateY(-12px) scale(1.03)';
+      button.style.boxShadow = '0 10px 12px -4px rgba(0,0,0,0.45), 0 20px 34px -6px rgba(0,0,0,0.55), 0 42px 68px -14px rgba(0,0,0,0.6), inset 0 3px 6px rgba(255,255,255,0.25), inset 0 -4px 10px rgba(0,0,0,0.45)';
+      sheen.style.opacity = '1';
     });
 
     button.addEventListener('mouseleave', () => {
-      button.style.background = 'rgba(255, 255, 255, 0.1)';
-      button.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+      button.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 60%, rgba(255,255,255,0.02) 100%)';
+      button.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+      button.style.transform = 'translateZ(16px) translateY(-6px) scale(1)';
+      button.style.boxShadow = '0 4px 6px -2px rgba(0,0,0,0.35), 0 10px 18px -4px rgba(0,0,0,0.45), 0 24px 38px -10px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.35)';
+      sheen.style.opacity = '0.9';
     });
 
     button.addEventListener('click', onClick);

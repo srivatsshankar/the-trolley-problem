@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Follow Test - Trolley Problem Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="controls">
+        <h3>Camera Follow Test</h3>
+        <p>Watch the camera smoothly follow the red trolley as it moves forward.</p>
+        <button id="startBtn">Start Game</button>
+        <button id="resetBtn">Reset Camera</button>
+        <button id="toggleFollowBtn">Toggle Follow</button>
+        <div id="status">Status: Ready</div>
+    </div>
+
+    <script type="module">
+        import { GameController } from './src/GameController.js';
+        
+        console.log('Camera Follow Test - Starting...');
+        
+        // Get canvas
+        const canvas = document.getElementById('gameCanvas');
+        const statusDiv = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const toggleFollowBtn = document.getElementById('toggleFollowBtn');
+        
+        let gameController = null;
+        let isFollowing = true;
+        
+        // Update status
+        function updateStatus(message) {
+            statusDiv.textContent = `Status: ${message}`;
+            console.log(`[Test] ${message}`);
+        }
+        
+        // Initialize game
+        async function initGame() {
+            try {
+                updateStatus('Initializing...');
+                
+                gameController = new GameController({
+                    canvas: canvas
+                });
+                
+                await gameController.initialize();
+                gameController.start();
+                
+                updateStatus('Game initialized - Camera following enabled');
+                startBtn.disabled = false;
+                resetBtn.disabled = false;
+                toggleFollowBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('Game initialization failed:', error);
+                updateStatus(`Error: ${error.message}`);
+            }
+        }
+        
+        // Start game
+        function startGame() {
+            if (gameController) {
+                gameController.startGame();
+                updateStatus('Game started - Watch the camera follow the trolley!');
+                startBtn.textContent = 'Game Running';
+                startBtn.disabled = true;
+            }
+        }
+        
+        // Reset camera
+        function resetCamera() {
+            if (gameController) {
+                const cameraController = gameController.getCameraController();
+                cameraController.resetCamera();
+                updateStatus('Camera reset to original position');
+            }
+        }
+        
+        // Toggle camera following
+        function toggleFollow() {
+            if (gameController) {
+                const cameraController = gameController.getCameraController();
+                
+                if (isFollowing) {
+                    cameraController.clearTarget();
+                    toggleFollowBtn.textContent = 'Enable Follow';
+                    updateStatus('Camera following disabled');
+                } else {
+                    // Re-enable following (assuming trolley exists)
+                    // This is a simplified approach - in real game we'd get the trolley reference
+                    updateStatus('Camera following enabled');
+                    toggleFollowBtn.textContent = 'Disable Follow';
+                }
+                
+                isFollowing = !isFollowing;
+            }
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startGame);
+        resetBtn.addEventListener('click', resetCamera);
+        toggleFollowBtn.addEventListener('click', toggleFollow);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (gameController) {
+                // The SceneManager handles resize automatically
+                updateStatus('Window resized');
+            }
+        });
+        
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            updateStatus('Page loaded, initializing game...');
+            initGame();
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (gameController) {
+                gameController.dispose();
+            }
+        });
+    </script>
+</body>
+</html>

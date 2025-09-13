@@ -5,6 +5,8 @@
 import { MainMenu } from './MainMenu';
 import { OptionsMenu } from './OptionsMenu';
 import { InstructionsMenu } from './InstructionsMenu';
+import { Menu3D } from './Menu3D';
+import * as THREE from 'three';
 
 export enum MenuState {
   MAIN = 'main',
@@ -17,8 +19,10 @@ export class MenuManager {
   private mainMenu: MainMenu;
   private optionsMenu: OptionsMenu;
   private instructionsMenu: InstructionsMenu;
+  private menu3D?: Menu3D;
   private currentState: MenuState = MenuState.MAIN;
   private onStartGame?: () => void;
+  private use3DMenu: boolean = false;
 
   constructor() {
     this.mainMenu = new MainMenu();
@@ -26,6 +30,16 @@ export class MenuManager {
     this.instructionsMenu = new InstructionsMenu();
     
     this.setupMenuCallbacks();
+  }
+
+  /**
+   * Set Three.js context to enable 3D menu
+   */
+  public setThreeJSContext(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
+    this.menu3D = new Menu3D({ scene, camera, renderer });
+    this.use3DMenu = true;
+    this.setup3DMenuCallbacks();
+    console.log('MenuManager: 3D menu context set');
   }
 
   /**
@@ -58,14 +72,44 @@ export class MenuManager {
   }
 
   /**
+   * Set up callbacks for 3D menu
+   */
+  private setup3DMenuCallbacks(): void {
+    if (!this.menu3D) return;
+
+    this.menu3D.onStartGameCallback(() => {
+      console.log('MenuManager: 3D menu start game callback');
+      this.hideAllMenus();
+      this.onStartGame?.();
+    });
+
+    this.menu3D.onOptionsCallback(() => {
+      console.log('MenuManager: 3D menu options callback');
+      this.showOptions();
+    });
+
+    this.menu3D.onInstructionsCallback(() => {
+      console.log('MenuManager: 3D menu instructions callback');
+      this.showInstructions();
+    });
+  }
+
+  /**
    * Show the main menu
    */
   public showMainMenu(): void {
     console.log('MenuManager: showMainMenu() called');
     this.hideOtherMenus();
-    this.mainMenu.show();
+    
+    if (this.use3DMenu && this.menu3D) {
+      this.menu3D.show();
+      console.log('MenuManager: 3D main menu shown');
+    } else {
+      this.mainMenu.show();
+      console.log('MenuManager: HTML main menu shown');
+    }
+    
     this.currentState = MenuState.MAIN;
-    console.log('MenuManager: Main menu should now be visible');
   }
 
   /**
@@ -96,6 +140,11 @@ export class MenuManager {
     this.mainMenu.hide();
     this.optionsMenu.hide();
     this.instructionsMenu.hide();
+    
+    if (this.menu3D) {
+      this.menu3D.hide();
+    }
+    
     this.currentState = MenuState.HIDDEN;
   }
 
@@ -107,6 +156,11 @@ export class MenuManager {
     // This prevents the race condition with hide/show
     this.optionsMenu.hide();
     this.instructionsMenu.hide();
+    
+    // For 3D menu, we only hide HTML menus since 3D menu replaces main menu
+    if (this.use3DMenu) {
+      this.mainMenu.hide();
+    }
   }
 
   /**
@@ -135,9 +189,15 @@ export class MenuManager {
    */
   public initialize(): void {
     console.log('MenuManager: initialize() called');
-    // Don't call showMainMenu() which would hide the main menu first
-    // Just show it directly
-    this.mainMenu.show();
+    
+    if (this.use3DMenu && this.menu3D) {
+      this.menu3D.show();
+      console.log('MenuManager: 3D menu initialized and shown');
+    } else {
+      this.mainMenu.show();
+      console.log('MenuManager: HTML menu initialized and shown');
+    }
+    
     this.currentState = MenuState.MAIN;
     console.log('MenuManager: initialization complete');
   }
@@ -149,5 +209,9 @@ export class MenuManager {
     this.mainMenu.dispose();
     this.optionsMenu.dispose();
     this.instructionsMenu.dispose();
+    
+    if (this.menu3D) {
+      this.menu3D.dispose();
+    }
   }
 }

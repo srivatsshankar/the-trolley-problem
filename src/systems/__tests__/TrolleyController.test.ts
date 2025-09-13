@@ -32,7 +32,7 @@ describe('TrolleyController', () => {
       const position = trolleyController.position;
       expect(position.x).toBe(-4); // Track 1 should be at x=-4
       expect(position.y).toBe(0);
-      expect(position.z).toBe(0);
+      expect(position.z).toBe(2); // Start on the first track segment
     });
 
     it('should calculate track positions correctly', () => {
@@ -247,7 +247,7 @@ describe('TrolleyController', () => {
       const position = trolleyController.position;
       expect(position.x).toBe(-4); // Track 1 position
       expect(position.y).toBe(0);
-      expect(position.z).toBe(0);
+      expect(position.z).toBe(2); // Start on the first track segment
     });
 
     it('should allow manual position setting', () => {
@@ -314,7 +314,7 @@ describe('TrolleyController', () => {
       
       expect(mockMesh.position.x).toBe(-4); // Track 1 position
       expect(mockMesh.position.y).toBe(0);
-      expect(mockMesh.position.z).toBe(0);
+      expect(mockMesh.position.z).toBe(2); // Start on the first track segment
     });
   });
 

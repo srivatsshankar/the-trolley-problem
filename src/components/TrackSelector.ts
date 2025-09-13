@@ -21,16 +21,41 @@ export class TrackSelector {
     private config: TrackSelectorConfig;
     private container: HTMLElement;
     private buttons: TrackButton[] = [];
-    private selectedTrack: number = 1; // Default to track 1
+    private selectedTrack: number = 3; // Default to track 3 per gameplay
     private onTrackSelectedCallback?: (trackNumber: number) => void;
+    private fontLoaded: boolean = false;
     
     constructor(config: TrackSelectorConfig) {
         this.config = config;
         this.container = this.createContainer();
-        this.createButtons();
-        this.setupEventHandlers();
+
+        // Try to load Minecraft font; proceed regardless
+        this.loadMinecraftFont().finally(() => {
+            this.createButtons();
+            this.setupEventHandlers();
+        });
         
         console.log('[TrackSelector] Created with', config.trackCount, 'track buttons');
+    }
+
+    /**
+     * Attempt to load the Minecraft font so numbers match main menu styling
+     */
+    private async loadMinecraftFont(): Promise<void> {
+        try {
+            // Guard for test/jsdom environments
+            const AnyWindow: any = window as any;
+            if (typeof AnyWindow.FontFace !== 'function') {
+                return;
+            }
+            const font = new AnyWindow.FontFace('Minecraft', 'url(/src/assets/fonts/Minecraft.ttf)');
+            await font.load();
+            (document as any).fonts.add(font);
+            this.fontLoaded = true;
+        } catch {
+            // Non-fatal; fallback system font will be used
+            this.fontLoaded = false;
+        }
     }
     
     /**
@@ -83,36 +108,51 @@ export class TrackSelector {
         button.id = `track-button-${trackNumber}`;
         button.textContent = trackNumber.toString();
         button.setAttribute('data-track', trackNumber.toString());
+        button.setAttribute('role', 'button');
+        button.setAttribute('aria-pressed', (trackNumber === this.selectedTrack).toString());
         
-        // Style the button with bright, vivid colors
+        // Per-button color mapping to match requested palette
+        const colorMap: Record<number, { start: string; end: string } > = {
+            1: { start: '#e74c3c', end: '#c0392b' }, // red
+            2: { start: '#3498db', end: '#2980b9' }, // blue
+            3: { start: '#2ecc71', end: '#27ae60' }, // green
+            4: { start: '#f1c40f', end: '#d4ac0d' }, // yellow
+            5: { start: '#e67e22', end: '#d35400' }  // orange
+        };
+        const colors = colorMap[trackNumber] || colorMap[2];
+
+        // Style to resemble main menu buttons (3D-ish, bold, Minecraft font)
         button.style.cssText = `
             width: ${this.config.buttonWidth}px;
             height: ${this.config.buttonHeight}px;
-            border: 3px solid #2c3e50;
-            border-radius: 8px;
-            background: linear-gradient(145deg, #3498db, #2980b9);
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
+            border: 3px solid rgba(0,0,0,0.5);
+            border-radius: 10px;
+            background: linear-gradient(145deg, ${colors.start}, ${colors.end});
+            color: #ffffff;
+            font-size: 22px;
+            font-family: ${this.fontLoaded ? 'Minecraft, Arial, sans-serif' : 'Arial, sans-serif'};
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+            transform: translateY(0);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35), inset 0 -4px 0 rgba(255, 255, 255, 0.15);
             user-select: none;
             outline: none;
+            padding: 0;
         `;
         
-        // Add hover effects
+        // Add hover effects (raise slightly when not selected)
         button.addEventListener('mouseenter', () => {
             if (!this.isButtonSelected(trackNumber)) {
                 button.style.transform = 'translateY(-2px)';
-                button.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.3)';
+                button.style.boxShadow = '0 10px 24px rgba(0, 0, 0, 0.45), inset 0 -4px 0 rgba(255,255,255,0.2)';
             }
         });
-        
+
         button.addEventListener('mouseleave', () => {
             if (!this.isButtonSelected(trackNumber)) {
                 button.style.transform = 'translateY(0)';
-                button.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+                button.style.boxShadow = '0 6px 14px rgba(0, 0, 0, 0.35), inset 0 -4px 0 rgba(255,255,255,0.15)';
             }
         });
         
@@ -128,6 +168,13 @@ export class TrackSelector {
                 event.preventDefault();
                 this.selectTrack(trackButton.trackNumber);
             });
+
+            // Touch support for mobile devices
+            trackButton.element.addEventListener('touchstart', (event) => {
+                // Prevent synthetic mouse events and default scrolling
+                event.preventDefault();
+                this.selectTrack(trackButton.trackNumber);
+            }, { passive: false });
         });
     }
     
@@ -147,6 +194,7 @@ export class TrackSelector {
         // Update button states
         this.buttons.forEach(trackButton => {
             trackButton.isSelected = trackButton.trackNumber === trackNumber;
+            trackButton.element.setAttribute('aria-pressed', trackButton.isSelected.toString());
         });
         
         // Update visual feedback
@@ -168,19 +216,15 @@ export class TrackSelector {
             const button = trackButton.element;
             
             if (trackButton.isSelected) {
-                // Selected button style - bright orange/yellow
-                button.style.background = 'linear-gradient(145deg, #f39c12, #e67e22)';
-                button.style.borderColor = '#d35400';
-                button.style.transform = 'translateY(-3px)';
-                button.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.4)';
-                button.style.color = 'white';
+                // Pressed look: slightly down, stronger inner shadow
+                button.style.transform = 'translateY(2px)';
+                button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.35), inset 0 4px 0 rgba(0,0,0,0.2)';
+                button.style.filter = 'brightness(0.98)';
             } else {
-                // Unselected button style - blue
-                button.style.background = 'linear-gradient(145deg, #3498db, #2980b9)';
-                button.style.borderColor = '#2c3e50';
+                // Default raised look
                 button.style.transform = 'translateY(0)';
-                button.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
-                button.style.color = 'white';
+                button.style.boxShadow = '0 6px 14px rgba(0, 0, 0, 0.35), inset 0 -4px 0 rgba(255,255,255,0.15)';
+                button.style.filter = 'none';
             }
         });
     }

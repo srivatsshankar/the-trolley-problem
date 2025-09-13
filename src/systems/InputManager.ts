@@ -90,7 +90,18 @@ export class InputManager {
     this.trackSelector.onTrackSelected((trackNumber: number) => {
       this.handleTrackSelection(trackNumber);
     });
+
+    // Keyboard shortcuts: 1-5 select tracks
+    window.addEventListener('keydown', this.onKeyDown);
   }
+
+  private onKeyDown = (event: KeyboardEvent) => {
+    if (!this.isEnabled) return;
+    if (['1','2','3','4','5'].includes(event.key)) {
+      const track = parseInt(event.key, 10);
+      this.selectTrack(track);
+    }
+  };
   
   /**
    * Handle track selection and add to queue
@@ -221,6 +232,17 @@ export class InputManager {
     const trolleyPosition = this.trolleyController.position;
     const segmentLength = this.gameConfig.tracks.segmentLength;
     const currentSegment = Math.floor(trolleyPosition.z / segmentLength);
+    const upcomingSegment = currentSegment + 1;
+
+    // Auto-enqueue the currently pressed button for the upcoming segment
+    // Requirement: before entering a new segment, enqueue the pressed value
+    const hasUpcoming = this.selectionQueue.some(e => e.segmentIndex === upcomingSegment);
+    if (!hasUpcoming) {
+      // Ensure exactly one queued value for the upcoming segment at all times
+      this.addToQueue(this.currentSelectedTrack, upcomingSegment);
+      this.updatePathPreview(this.currentSelectedTrack, upcomingSegment);
+      console.log(`[InputManager] Auto-queued track ${this.currentSelectedTrack} for segment ${upcomingSegment}`);
+    }
     
     if (currentSegment > this.lastProcessedSegment) {
       this.processSegmentEntry(currentSegment);
@@ -349,6 +371,11 @@ export class InputManager {
    */
   public mount(): void {
     this.trackSelector.mount();
+  // Default pressed is track 3
+  const prev = this.isEnabled; this.isEnabled = false; // avoid queueing on initial select
+  this.trackSelector.selectTrack(3);
+  this.currentSelectedTrack = 3;
+  this.isEnabled = prev;
     console.log('[InputManager] Track selector UI mounted');
   }
   
@@ -448,6 +475,7 @@ export class InputManager {
    * Dispose of all resources
    */
   public dispose(): void {
+  window.removeEventListener('keydown', this.onKeyDown);
     this.trackSelector.dispose();
     
     // Dispose of enhanced path preview system

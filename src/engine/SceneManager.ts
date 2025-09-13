@@ -72,7 +72,9 @@ export class SceneManager {
     private setupCamera(): void {
         // Calculate camera bounds for isometric view
         const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = 20;
+        // Increased frustum size for better mobile visibility (from 20 to 35)
+        // This allows players to see more of the track system and game objects
+        const frustumSize = 35;
         
         // Create orthographic camera for true isometric view
         this.camera = new THREE.OrthographicCamera(
@@ -184,7 +186,8 @@ export class SceneManager {
         if (!this.isInitialized) return;
         
         const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = 20;
+        // Use the same increased frustum size for consistency with camera setup
+        const frustumSize = 35;
         
         // Update camera
         this.camera.left = frustumSize * aspect / -2;
@@ -300,6 +303,6 @@ export const DEFAULT_SCENE_CONFIG: Omit<SceneManagerConfig, 'canvas'> = {
     enableShadows: true,
     antialias: true,
     backgroundColor: 0x87CEEB, // Sky blue for bright, vivid feel
-    cameraDistance: 15,
-    cameraHeight: 15
+    cameraDistance: 20, // Increased from 15 to work better with larger frustum
+    cameraHeight: 20    // Increased from 15 to maintain good perspective
 };

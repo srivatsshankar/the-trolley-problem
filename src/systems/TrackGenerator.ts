@@ -46,7 +46,7 @@ export class TrackGenerator {
       maxVisibleSegments: gameConfig.rendering.maxVisibleSegments,
       viewDistance: gameConfig.rendering.viewDistance,
       cleanupDistance: gameConfig.rendering.viewDistance * 1.5,
-      trackSpacing: gameConfig.tracks.width * 1.2,
+      trackSpacing: gameConfig.tracks.width * 2.0, // Increased from 1.2 to 2.0 for better spacing
       ...generationConfig
     };
     
@@ -162,7 +162,7 @@ export class TrackGenerator {
   }
 
   /**
-   * Progressive track generation based on camera/trolley position
+  * Progressive track generation based on camera/trolley position
    * Requirement 7.3: Progressive generation
    */
   public updateGeneration(currentPosition: THREE.Vector3): void {

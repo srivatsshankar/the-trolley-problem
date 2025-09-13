@@ -30,7 +30,8 @@ describe('TrackSelector', () => {
     
     test('should create TrackSelector with correct configuration', () => {
         expect(trackSelector).toBeDefined();
-        expect(trackSelector.getSelectedTrack()).toBe(1); // Default selection
+        // Default selection is track 3 per game requirements
+        expect(trackSelector.getSelectedTrack()).toBe(3);
     });
     
     test('should create 5 track buttons', () => {
@@ -58,8 +59,8 @@ describe('TrackSelector', () => {
     test('should select track correctly', () => {
         trackSelector.mount();
         
-        // Initially track 1 should be selected
-        expect(trackSelector.getSelectedTrack()).toBe(1);
+        // Initially track 3 should be selected
+        expect(trackSelector.getSelectedTrack()).toBe(3);
         
         // Select track 3
         trackSelector.selectTrack(3);
@@ -74,10 +75,10 @@ describe('TrackSelector', () => {
         const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         
         trackSelector.selectTrack(0); // Invalid
-        expect(trackSelector.getSelectedTrack()).toBe(1); // Should remain unchanged
+        expect(trackSelector.getSelectedTrack()).toBe(3); // Should remain unchanged
         
         trackSelector.selectTrack(6); // Invalid
-        expect(trackSelector.getSelectedTrack()).toBe(1); // Should remain unchanged
+        expect(trackSelector.getSelectedTrack()).toBe(3); // Should remain unchanged
         
         expect(consoleSpy).toHaveBeenCalledTimes(2);
         consoleSpy.mockRestore();
@@ -168,28 +169,30 @@ describe('TrackSelector', () => {
         const selectedButton = document.querySelector('[data-track="2"]') as HTMLButtonElement;
         const unselectedButton = document.querySelector('[data-track="1"]') as HTMLButtonElement;
         
-        // Selected button should have different styling
-        expect(selectedButton.style.background).toContain('f39c12'); // Orange gradient
-        expect(selectedButton.style.transform).toBe('translateY(-3px)');
+        // Selected button should appear pressed with aria-pressed=true and pressed transform
+        expect(selectedButton.getAttribute('aria-pressed')).toBe('true');
+        expect(selectedButton.style.transform).toBe('translateY(2px)');
         
-        // Unselected button should have default styling
-        expect(unselectedButton.style.background).toContain('3498db'); // Blue gradient
+        // Unselected button should not be pressed
+        expect(unselectedButton.getAttribute('aria-pressed')).toBe('false');
         expect(unselectedButton.style.transform).toBe('translateY(0)');
     });
     
     test('should maintain only one selected button at a time', () => {
         trackSelector.mount();
         
-        // Initially track 1 is selected
-        trackSelector.selectTrack(3);
+        // Select track 4 and verify exclusivity
+        trackSelector.selectTrack(4);
         
-        // Check that only track 3 button has selected styling
         for (let i = 1; i <= 5; i++) {
             const button = document.querySelector(`[data-track="${i}"]`) as HTMLButtonElement;
-            if (i === 3) {
-                expect(button.style.background).toContain('f39c12'); // Selected (orange)
+            const pressed = button.getAttribute('aria-pressed');
+            if (i === 4) {
+                expect(pressed).toBe('true');
+                expect(button.style.transform).toBe('translateY(2px)');
             } else {
-                expect(button.style.background).toContain('3498db'); // Unselected (blue)
+                expect(pressed).toBe('false');
+                expect(button.style.transform).toBe('translateY(0)');
             }
         }
     });

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Camera Following</title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="debug">
+        <div>Camera: <span id="camera-pos">-</span></div>
+        <div>Trolley: <span id="trolley-pos">-</span></div>
+        <div>Following: <span id="following">-</span></div>
+        <div>Frame: <span id="frame">0</span></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+
+        // Get elements
+        const canvas = document.getElementById('canvas');
+        const cameraPosEl = document.getElementById('camera-pos');
+        const trolleyPosEl = document.getElementById('trolley-pos');
+        const followingEl = document.getElementById('following');
+        const frameEl = document.getElementById('frame');
+
+        // Create scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+
+        // Create camera (isometric) - updated with increased frustum size for mobile
+        const aspect = window.innerWidth / window.innerHeight;
+        const frustumSize = 35; // Increased from 20 for better mobile visibility
+        const camera = new THREE.OrthographicCamera(
+            frustumSize * aspect / -2,
+            frustumSize * aspect / 2,
+            frustumSize / 2,
+            frustumSize / -2,
+            0.1,
+            1000
+        );
+        camera.position.set(15, 15, 15);
+        camera.lookAt(0, 0, 0);
+
+        // Create renderer
+        const renderer = new THREE.WebGLRenderer({ canvas });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Add lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // Create ground
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // Create trolley
+        const trolleyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+        const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
+        const trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+        // Position trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+        trolley.position.set(0, 0.75, -25);
+        scene.add(trolley);
+
+        // Simple camera following logic
+        let isFollowing = false;
+        let frameCount = 0;
+        const originalCameraPos = camera.position.clone();
+
+        function updateCamera() {
+            if (isFollowing) {
+                // Simple following: maintain offset from trolley
+                const targetX = trolley.position.x + 15;
+                const targetY = 15;
+                const targetZ = trolley.position.z + 15;
+                
+                // Smooth interpolation
+                camera.position.x += (targetX - camera.position.x) * 0.05;
+                camera.position.y += (targetY - camera.position.y) * 0.05;
+                camera.position.z += (targetZ - camera.position.z) * 0.05;
+            }
+        }
+
+        function animate() {
+            frameCount++;
+            
+            // Move trolley
+            trolley.position.z += 0.03;
+            
+            // Start following after trolley moves a bit
+            if (!isFollowing && trolley.position.z > -20) {
+                isFollowing = true;
+                console.log('Started following at frame', frameCount);
+            }
+            
+            // Reset trolley
+            if (trolley.position.z > 30) {
+                trolley.position.z = -25;
+                isFollowing = false;
+                camera.position.copy(originalCameraPos);
+            }
+            
+            // Update camera
+            updateCamera();
+            
+            // Update debug info
+            cameraPosEl.textContent = `(${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)})`;
+            trolleyPosEl.textContent = `(${trolley.position.x.toFixed(1)}, ${trolley.position.y.toFixed(1)}, ${trolley.position.z.toFixed(1)})`;
+            followingEl.textContent = isFollowing ? 'Yes' : 'No';
+            frameEl.textContent = frameCount;
+            
+            // Render
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const aspect = window.innerWidth / window.innerHeight;
+            const frustumSize = 35; // Updated to match the new camera settings
+            camera.left = frustumSize * aspect / -2;
+            camera.right = frustumSize * aspect / 2;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>

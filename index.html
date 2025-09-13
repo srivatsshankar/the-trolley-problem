@@ -11,12 +11,14 @@
             overflow: hidden;
             background-color: #87CEEB;
             font-family: Arial, sans-serif;
+            touch-action: manipulation; /* Improves touch responsiveness */
         }
         
         #gameCanvas {
             display: block;
             width: 100vw;
             height: 100vh;
+            touch-action: none; /* Prevents default touch behaviors on canvas */
         }
         
         #gameContainer {

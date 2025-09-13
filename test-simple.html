@@ -160,13 +160,45 @@
                 scene.add(track);
             }
             
-            // Create a simple trolley
-            const trolleyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
-            const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
-            const trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
-            trolley.position.set(0, 0.5, -5);
-            trolley.castShadow = true;
-            scene.add(trolley);
+            // Create enhanced trolley
+            let trolleyModel;
+            let trolley; // Keep for backward compatibility
+            try {
+                // Try to import and use the enhanced trolley
+                import('./dist/models/Trolley.js').then(({ createTrolley }) => {
+                    trolleyModel = createTrolley();
+                    const trolleyGroup = trolleyModel.getGroup();
+                    trolleyGroup.position.set(0, 0, -5);
+                    scene.add(trolleyGroup);
+                    // Enable real-time window reflections for trial (default resolution)
+                    try {
+                        trolleyModel.enableWindowReflections(scene, renderer);
+                    } catch (e) {
+                        console.warn('Window reflections not available:', e);
+                    }
+                    console.log('Enhanced trolley created successfully!');
+                }).catch(error => {
+                    console.warn('Could not load enhanced trolley, using fallback:', error);
+                    // Fallback to simple trolley - position it correctly on rails
+                    const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+                    const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+                    trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+                    // Position fallback trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+                    trolley.position.set(0, 0.75, -5);
+                    trolley.castShadow = true;
+                    scene.add(trolley);
+                });
+            } catch (error) {
+                console.warn('Could not load enhanced trolley, using fallback:', error);
+                // Fallback to simple trolley - position it correctly on rails
+                const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+                const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+                trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+                // Position fallback trolley to sit on rails: rail height (0.25) + half trolley height (0.5)
+                trolley.position.set(0, 0.75, -5);
+                trolley.castShadow = true;
+                scene.add(trolley);
+            }
             
             updateStatus('Starting animation loop...');
             
@@ -180,12 +212,25 @@
                 
                 frameCount++;
                 
-                // Move trolley forward
-                trolley.position.z += trolleySpeed * 0.016; // Assuming ~60fps
-                
-                // Reset trolley position when it goes too far
-                if (trolley.position.z > 15) {
-                    trolley.position.z = -15;
+                // Update enhanced trolley if available
+                if (trolleyModel) {
+                    trolleyModel.update(0.016, trolleySpeed);
+                    // Move trolley forward
+                    const currentPos = trolleyModel.getGroup().position;
+                    currentPos.z += trolleySpeed * 0.016;
+                    
+                    // Reset trolley position when it goes too far
+                    if (currentPos.z > 15) {
+                        currentPos.z = -15;
+                    }
+                } else if (trolley) {
+                    // Move simple trolley forward
+                    trolley.position.z += trolleySpeed * 0.016;
+                    
+                    // Reset trolley position when it goes too far
+                    if (trolley.position.z > 15) {
+                        trolley.position.z = -15;
+                    }
                 }
                 
                 // Update status every 60 frames

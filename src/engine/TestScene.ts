@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { SceneManager } from './SceneManager';
+import { createRailwayTrack } from '../models/RailwayTrack';
 
 export class TestScene {
     private sceneManager: SceneManager;
@@ -113,24 +114,15 @@ export class TestScene {
             this.testObjects.push(track);
         }
         
-        // Create track rails
+        // Create realistic railway tracks
         for (let i = 0; i < 5; i++) {
-            // Left rail
-            const leftRailGeometry = new THREE.BoxGeometry(0.1, 0.3, trackLength);
-            const railMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 }); // Dark gray
+            const trackPosition = new THREE.Vector3((i - 2) * trackSpacing, 0, 0);
+            const railwayTrack = createRailwayTrack(i, trackPosition, 'NORMAL', {
+                length: trackLength
+            });
             
-            const leftRail = new THREE.Mesh(leftRailGeometry, railMaterial);
-            leftRail.position.set((i - 2) * trackSpacing - 0.6, 0.25, 0);
-            leftRail.castShadow = true;
-            
-            // Right rail
-            const rightRail = new THREE.Mesh(leftRailGeometry.clone(), railMaterial.clone());
-            rightRail.position.set((i - 2) * trackSpacing + 0.6, 0.25, 0);
-            rightRail.castShadow = true;
-            
-            this.sceneManager.addToScene(leftRail);
-            this.sceneManager.addToScene(rightRail);
-            this.testObjects.push(leftRail, rightRail);
+            this.sceneManager.addToScene(railwayTrack.group);
+            this.testObjects.push(railwayTrack.group);
         }
         
         this.log('Test tracks created');

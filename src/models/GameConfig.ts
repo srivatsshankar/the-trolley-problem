@@ -43,7 +43,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
   trolley: {
     baseSpeed: 5.0,
-    speedIncrease: 0.03, // 3% increase per segment (Requirement 7.1)
+  speedIncrease: 0.0103, // 1.03% increase per segment (Requirement 7.1)
     maxSpeedMultiplier: 5.0 // 5x base speed threshold (Requirement 7.4)
   },
   difficulty: {

@@ -8,7 +8,12 @@ import * as THREE from 'three';
 import { GameEngine } from './engine/GameEngine';
 import { SceneManager, DEFAULT_SCENE_CONFIG } from './engine/SceneManager';
 import { GameState } from './models/GameState';
-import { GameConfig } from './models/GameConfig';
+import { GameConfig, DEFAULT_CONFIG } from './models/GameConfig';
+import { TrackGenerator } from './systems/TrackGenerator';
+import { CameraController } from './systems/CameraController';
+import { TrolleyController } from './systems/TrolleyController';
+import { GroundSystem } from './systems/GroundSystem';
+import { createTrackStopper } from './models/TrackStopper';
 
 export enum GamePhase {
   MENU = 'menu',
@@ -26,7 +31,11 @@ export class GameController {
   // Core systems
   private gameEngine: GameEngine;
   private sceneManager: SceneManager;
-  // gameConfig removed as it's unused
+  private trackGenerator: TrackGenerator;
+  private cameraController: CameraController;
+  private trolleyController: TrolleyController;
+  private gameConfig: GameConfig;
+  private groundSystem: GroundSystem | null = null;
 
   // Game state
   private gameState: GameState;
@@ -37,13 +46,12 @@ export class GameController {
   private lastFrameTime: number = 0;
   private frameCount: number = 0;
 
-  // Simple game objects for testing
-  private trolley?: THREE.Mesh;
-  private tracks: THREE.Mesh[] = [];
-  private trolleySpeed: number = 2;
-
   constructor(config: GameControllerConfig) {
-    // gameConfig assignment removed as it's unused
+    // Merge provided config with defaults
+    this.gameConfig = {
+      ...DEFAULT_CONFIG,
+      ...config.gameConfig
+    };
 
     // Initialize core systems
     this.gameEngine = new GameEngine({
@@ -56,6 +64,28 @@ export class GameController {
       ...DEFAULT_SCENE_CONFIG,
       canvas: config.canvas
     });
+
+    // Initialize track generator (will be set up after scene is ready)
+    this.trackGenerator = new TrackGenerator(
+      this.sceneManager.getScene(),
+      this.gameConfig
+    );
+
+    // Initialize trolley controller
+    this.trolleyController = new TrolleyController(this.gameConfig);
+
+    // Initialize camera controller (will be set up after scene is ready)
+    this.cameraController = new CameraController(
+      this.sceneManager.getCamera(),
+      {
+        followDistance: 15,  // Match original Z offset
+        followHeight: 15,    // Match original Y offset
+        followOffset: 15,    // Match original X offset
+        smoothness: 0.05,    // Smoother following
+        lookAtTarget: false, // Don't change rotation for isometric view
+        minFollowDistance: 0.5
+      }
+    );
 
     // Initialize game state
     this.gameState = new GameState();
@@ -94,35 +124,35 @@ export class GameController {
    */
   private createBasicScene(): void {
     const scene = this.sceneManager.getScene();
+  // Create tiling ground system instead of a single large plane
+  this.groundSystem = new GroundSystem(scene, { tileSize: 200, gridHalfExtent: 1, color: 0x90EE90 });
+  this.groundSystem.initialize(new THREE.Vector3(0, 0, 0));
 
-    // Create ground
-    const groundGeometry = new THREE.PlaneGeometry(50, 50);
-    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    // Initialize track generator with proper single-to-multiple track system
+    this.trackGenerator.initialize();
 
-    // Create tracks
-    const trackMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-    for (let i = 0; i < 5; i++) {
-      const trackGeometry = new THREE.BoxGeometry(1.5, 0.1, 20);
-      const track = new THREE.Mesh(trackGeometry, trackMaterial);
-      track.position.set((i - 2) * 2, 0.05, 0);
-      track.castShadow = true;
-      scene.add(track);
-      this.tracks.push(track);
+  // Create track stopper after the start so it sits just ahead of the trolley
+  const trackStopper = createTrackStopper(new THREE.Vector3(0, 0.1, -2));
+    scene.add(trackStopper.getGroup());
+
+    // Create and position trolley using the proper controller
+    this.trolleyController.createTrolley();
+    const trolleyGroup = this.trolleyController.getTrolleyGroup();
+    if (trolleyGroup) {
+      scene.add(trolleyGroup);
+      // Enable real-time window reflections (trial with default resolution)
+      const trolley = this.trolleyController.getTrolley();
+      if (trolley) {
+        trolley.enableWindowReflections(this.sceneManager.getScene(), this.sceneManager.getRenderer());
+      }
     }
 
-    // Create trolley
-    const trolleyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
-    const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
-    this.trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
-    this.trolley.position.set(0, 0.5, -5);
-    this.trolley.castShadow = true;
-    scene.add(this.trolley);
+  // Ensure trolley starts ON the track (centered x=0) just after the stopper
+  this.trolleyController.setPosition(new THREE.Vector3(0, 0, 2));
 
-    this.log('Basic scene created with ground, tracks, and trolley');
+    // Don't set camera target immediately - wait for gameplay to start
+
+    this.log('Basic scene created with ground, proper track system, track stopper, and trolley');
   }
 
 
@@ -150,19 +180,31 @@ export class GameController {
     this.updatePerformanceTracking(deltaTime);
 
     // Update trolley movement
-    if (this.trolley && this.currentPhase === GamePhase.PLAYING) {
-      this.trolley.position.z += this.trolleySpeed * deltaTime;
+    if (this.currentPhase === GamePhase.PLAYING) {
+      this.trolleyController.update(deltaTime);
 
-      // Reset trolley position when it goes too far
-      if (this.trolley.position.z > 15) {
-        this.trolley.position.z = -15;
-      }
+      const trolleyPosition = this.trolleyController.position;
+
+      // Update track generation based on trolley position
+      this.trackGenerator.updateGeneration(trolleyPosition);
+
+  // No forced reset: tracks are generated endlessly; camera continues following
+    }
+
+    // Update camera to follow trolley
+    this.cameraController.update(deltaTime);
+
+    // Keep ground under the trolley (or camera if missing)
+    if (this.groundSystem) {
+      const target = this.trolleyController ? this.trolleyController.position : this.sceneManager.getCamera().position;
+      this.groundSystem.update(target);
     }
 
     // Log status periodically
     if (this.frameCount % 60 === 0) {
-      const trolleyZ = this.trolley ? this.trolley.position.z.toFixed(1) : 'N/A';
-      this.log(`Game running - Phase: ${this.currentPhase}, Trolley Z: ${trolleyZ}`);
+      const trolleyZ = this.trolleyController.position.z.toFixed(1);
+      const isFollowing = this.cameraController.isFollowing() ? 'Yes' : 'No';
+      this.log(`Game running - Phase: ${this.currentPhase}, Trolley Z: ${trolleyZ}, Camera Following: ${isFollowing}`);
     }
   }
 
@@ -207,6 +249,14 @@ export class GameController {
   public startGame(): void {
     this.log('Starting gameplay...');
     this.currentPhase = GamePhase.PLAYING;
+    
+    // Enable camera following immediately since trolley is positioned and ready
+    const trolleyGroup = this.trolleyController.getTrolleyGroup();
+    if (trolleyGroup) {
+      this.cameraController.setTarget(trolleyGroup);
+      this.log('Camera following enabled - game started');
+    }
+    
     this.log('Gameplay started');
   }
 
@@ -269,6 +319,20 @@ export class GameController {
   }
 
   /**
+   * Get camera controller for external access
+   */
+  public getCameraController(): CameraController {
+    return this.cameraController;
+  }
+
+  /**
+   * Get trolley controller for external access
+   */
+  public getTrolleyController(): TrolleyController {
+    return this.trolleyController;
+  }
+
+  /**
    * Dispose of all resources
    */
   public dispose(): void {
@@ -277,7 +341,21 @@ export class GameController {
     // Stop game engine
     this.gameEngine.destroy();
 
-    // Dispose scene manager
+    // Clear camera target
+    if (this.cameraController) {
+      this.cameraController.clearTarget();
+    }
+
+    // Dispose trolley controller
+    if (this.trolleyController) this.trolleyController.dispose();
+
+    // Dispose track generator
+    if (this.trackGenerator) this.trackGenerator.dispose();
+
+  // Dispose ground system
+  if (this.groundSystem) this.groundSystem.dispose();
+
+  // Dispose scene manager
     if (this.sceneManager) this.sceneManager.dispose();
 
     this.isInitialized = false;

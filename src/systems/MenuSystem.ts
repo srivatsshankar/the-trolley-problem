@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { SceneManager } from '../engine/SceneManager';
+import { createTrolley, Trolley } from '../models/Trolley';
 
 export enum MenuType {
     MAIN_MENU = 'main_menu',
@@ -51,6 +52,11 @@ export class MenuSystem {
     // Menu container groups
     private mainMenuGroup: THREE.Group;
     private currentMenuGroup: THREE.Group | null = null;
+    
+    // Decorative trolley shown under the main menu
+    private menuTrolleyContainer: THREE.Group | null = null;
+    private menuTrolley: Trolley | null = null;
+    private readonly menuTrolleyRockSpeed: number = 1.0; // constant speed to keep rocking in menu
     
     constructor(config: MenuSystemConfig) {
         this.sceneManager = config.sceneManager;
@@ -135,7 +141,54 @@ export class MenuSystem {
         }
         
         this.menuOptions.set(MenuType.MAIN_MENU, menuOptions);
-        this.log('Main menu created with 4 3D icons');
+        
+        // Add decorative trolley below the main menu
+        this.createMenuTrolley();
+        
+        this.log('Main menu created with 4 3D icons and decorative trolley');
+    }
+
+    /**
+     * Create a decorative trolley under the main menu
+     */
+    private createMenuTrolley(): void {
+        // Prevent duplicates
+        if (this.menuTrolleyContainer) {
+            this.mainMenuGroup.remove(this.menuTrolleyContainer);
+            this.menuTrolleyContainer = null;
+            this.menuTrolley = null;
+        }
+        
+        // Container lets us offset without fighting Trolley's internal Y animation
+        const container = new THREE.Group();
+        container.name = 'MenuTrolleyContainer';
+        
+        // Instantiate trolley model (uses default bright colors)
+        const trolley = createTrolley();
+        const trolleyGroup = trolley.getGroup();
+        
+        // Scale down a touch so it fits nicely under the menu
+        trolleyGroup.scale.set(0.85, 0.85, 0.85);
+        
+        // Slightly rotate to face the camera aesthetically if needed
+        trolleyGroup.rotation.y = Math.PI * 0.08;
+        
+        // Add to container and position container below icons (icons at y=2; trolley base ~1.15)
+        container.add(trolleyGroup);
+        container.position.set(0, -2.5, 0); // positions trolley well below the menu buttons
+        
+        // Enable shadows to match menu icon style
+        trolleyGroup.traverse((obj) => {
+            if ((obj as THREE.Mesh).isMesh) {
+                const mesh = obj as THREE.Mesh;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+            }
+        });
+        
+        this.mainMenuGroup.add(container);
+        this.menuTrolleyContainer = container;
+        this.menuTrolley = trolley;
     }
     
     /**
@@ -462,9 +515,11 @@ export class MenuSystem {
     /**
      * Update menu system (called each frame)
      */
-    public update(_deltaTime: number): void {
-        // Could add menu animations or updates here
-        // For now, menu is static except for interactions
+    public update(deltaTime: number): void {
+        // Keep the decorative trolley gently rocking in the main menu
+        if (this.currentMenu === MenuType.MAIN_MENU && this.menuTrolley) {
+            this.menuTrolley.update(deltaTime, this.menuTrolleyRockSpeed);
+        }
     }
     
     /**
@@ -482,6 +537,18 @@ export class MenuSystem {
         
         // Clean up menu groups
         this.hideCurrentMenu();
+        
+        // Dispose decorative trolley
+        if (this.menuTrolley) {
+            this.menuTrolley.dispose();
+            this.menuTrolley = null;
+        }
+        if (this.menuTrolleyContainer) {
+            if (this.mainMenuGroup.children.includes(this.menuTrolleyContainer)) {
+                this.mainMenuGroup.remove(this.menuTrolleyContainer);
+            }
+            this.menuTrolleyContainer = null;
+        }
         
         // Dispose of geometries and materials
         for (const [_menuType, options] of this.menuOptions) {

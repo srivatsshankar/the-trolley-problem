@@ -29,6 +29,7 @@ export class TrolleyController {
   private _transitionProgress: number;
   private _transitionDuration: number;
   private _segmentsPassed: number;
+  private _lastSpeedSegmentIndex: number;
   
   private config: GameConfig;
   private mesh?: THREE.Object3D;
@@ -42,13 +43,16 @@ export class TrolleyController {
     this.config = config;
     this._baseSpeed = config.trolley.baseSpeed;
     this._speed = this._baseSpeed;
-    this._currentTrack = 1; // Start on track 1 (center track)
+  this._currentTrack = 1; // Start on track 1 (center track)
     this._targetTrack = 1;
-    this._position = new THREE.Vector3(0, 0, 0);
+  // Start ON the track near the beginning (tracks start at z=0)
+  this._position = new THREE.Vector3(0, 0, 2);
     this._isTransitioning = false;
     this._transitionProgress = 0;
     this._transitionDuration = 1.0; // 1 second for track transitions
     this._segmentsPassed = 0;
+  // Initialize last segment index for speed progression
+  this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
     
     // Initialize collision detection system
     this.collisionDetection = createCollisionDetection({
@@ -107,6 +111,28 @@ export class TrolleyController {
       
       // Update collision detection bounding box
       this.collisionDetection.updateTrolleyBoundingBox(this.trolley);
+    }
+
+    // Auto-increase speed when crossing segment boundaries
+    this.updateSpeedProgression();
+  }
+
+  /**
+   * Detect segment boundary crossing and increase speed accordingly
+   */
+  private updateSpeedProgression(): void {
+    const segLen = this.config.tracks.segmentLength;
+    if (segLen <= 0) return;
+
+    const currentSegmentIndex = Math.floor(this._position.z / segLen);
+    if (currentSegmentIndex > this._lastSpeedSegmentIndex) {
+      // For each newly entered segment (skip negatives), apply speed increase
+      for (let i = this._lastSpeedSegmentIndex + 1; i <= currentSegmentIndex; i++) {
+        if (i >= 0) {
+          this.increaseSpeed();
+        }
+      }
+      this._lastSpeedSegmentIndex = currentSegmentIndex;
     }
   }
   
@@ -170,15 +196,16 @@ export class TrolleyController {
   }
   
   /**
-   * Increase speed by configured percentage per segment
-   * Requirement 7.1: 3% speed increase per segment
+  * Increase speed by configured percentage per segment
+  * Requirement 7.1: Speed increase per segment (configurable %)
    */
   public increaseSpeed(): void {
     this._segmentsPassed++;
-    const speedMultiplier = Math.pow(1 + this.config.trolley.speedIncrease, this._segmentsPassed);
-    this._speed = this._baseSpeed * speedMultiplier;
+   const rawMultiplier = Math.pow(1 + this.config.trolley.speedIncrease, this._segmentsPassed);
+   const clampedMultiplier = Math.min(this.config.trolley.maxSpeedMultiplier, rawMultiplier);
+   this._speed = this._baseSpeed * clampedMultiplier;
     
-    console.log(`Speed increased to ${this._speed.toFixed(2)} (${speedMultiplier.toFixed(2)}x base speed) after ${this._segmentsPassed} segments`);
+   console.log(`Speed increased to ${this._speed.toFixed(2)} (${(this._speed/this._baseSpeed).toFixed(2)}x base) after ${this._segmentsPassed} segments`);
   }
   
   /**
@@ -272,15 +299,16 @@ export class TrolleyController {
    * Reset trolley to initial state
    */
   public reset(): void {
-    this._position.set(0, 0, 0);
+  this._position.set(0, 0, 2); // Start on the first track segment near z=0
     this._currentTrack = 1;
     this._targetTrack = 1;
     this._speed = this._baseSpeed;
     this._isTransitioning = false;
     this._transitionProgress = 0;
     this._segmentsPassed = 0;
+  this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
     
-    // Set position to center track
+  // Set X position to current track
     this._position.x = this.trackPositions[this._currentTrack - 1];
     
     if (this.mesh) {
@@ -377,6 +405,8 @@ export class TrolleyController {
     if (this.trolley) {
       this.trolley.setPosition(this._position);
     }
+  // Recompute last segment index so speed progression remains correct
+  this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
   }
   
   /**
