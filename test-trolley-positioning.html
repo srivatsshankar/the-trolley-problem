@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trolley Positioning Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        #container {
+            width: 100%;
+            height: 600px;
+            background: #000;
+            position: relative;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            z-index: 100;
+        }
+        #controls {
+            margin-top: 10px;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Trolley Positioning Test</h1>
+    <p>This test verifies that the trolley correctly follows tracks and starts on the center track (track 3).</p>
+    
+    <div id="container">
+        <div id="info">
+            <div>Trolley Position: <span id="position">Loading...</span></div>
+            <div>Current Track: <span id="currentTrack">Loading...</span></div>
+            <div>Target Track: <span id="targetTrack">Loading...</span></div>
+            <div>Is Transitioning: <span id="transitioning">Loading...</span></div>
+            <div>Track Positions: <span id="trackPositions">Loading...</span></div>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <button onclick="switchToTrack(1)">Track 1</button>
+        <button onclick="switchToTrack(2)">Track 2</button>
+        <button onclick="switchToTrack(3)">Track 3 (Center)</button>
+        <button onclick="switchToTrack(4)">Track 4</button>
+        <button onclick="switchToTrack(5)">Track 5</button>
+        <button onclick="resetTrolley()">Reset</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from './node_modules/three/build/three.module.js';
+        import { TrolleyController } from './dist/systems/TrolleyController.js';
+        import { TrackGenerator } from './dist/systems/TrackGenerator.js';
+        import { DEFAULT_CONFIG } from './dist/models/GameConfig.js';
+
+        // Set up Three.js scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        
+        const container = document.getElementById('container');
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Set up lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 5);
+        scene.add(directionalLight);
+
+        // Initialize game systems
+        const trolleyController = new TrolleyController(DEFAULT_CONFIG);
+        const trackGenerator = new TrackGenerator(scene, DEFAULT_CONFIG);
+        
+        // Initialize track generation
+        trackGenerator.initialize();
+        
+        // Create trolley
+        const trolley = trolleyController.createTrolley();
+        if (trolley) {
+            scene.add(trolley.getGroup());
+        }
+
+        // Position camera to view the tracks from an isometric angle
+        camera.position.set(0, 15, 10);
+        camera.lookAt(0, 0, 0);
+
+        // Global functions for buttons
+        window.switchToTrack = function(trackNumber) {
+            trolleyController.switchToTrack(trackNumber);
+        };
+
+        window.resetTrolley = function() {
+            trolleyController.reset();
+        };
+
+        // Update info display
+        function updateInfo() {
+            const state = trolleyController.getState();
+            const trackPositions = trolleyController.getTrackPositions();
+            
+            document.getElementById('position').textContent = 
+                `(${state.position.x.toFixed(2)}, ${state.position.y.toFixed(2)}, ${state.position.z.toFixed(2)})`;
+            document.getElementById('currentTrack').textContent = state.currentTrack;
+            document.getElementById('targetTrack').textContent = state.targetTrack;
+            document.getElementById('transitioning').textContent = state.isTransitioning;
+            document.getElementById('trackPositions').textContent = 
+                trackPositions.map((pos, i) => `Track ${i+1}: ${pos.toFixed(2)}`).join(', ');
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update trolley
+            trolleyController.update(0.016); // 60 FPS
+            
+            // Update track generation
+            trackGenerator.updateGeneration(trolleyController.position);
+            
+            // Update info display
+            updateInfo();
+            
+            // Render scene
+            renderer.render(scene, camera);
+        }
+
+        // Start animation
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Log initial state for debugging
+        console.log('Initial trolley state:', trolleyController.getState());
+        console.log('Track positions:', trolleyController.getTrackPositions());
+    </script>
+</body>
+</html>

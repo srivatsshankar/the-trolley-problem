@@ -43,8 +43,8 @@ export class TrolleyController {
     this.config = config;
     this._baseSpeed = config.trolley.baseSpeed;
     this._speed = this._baseSpeed;
-  this._currentTrack = 1; // Start on track 1 (center track)
-    this._targetTrack = 1;
+  this._currentTrack = 3; // Start on track 3 (center track, matches single track)
+    this._targetTrack = 3;
   // Start ON the track near the beginning (tracks start at z=0)
   this._position = new THREE.Vector3(0, 0, 2);
     this._isTransitioning = false;
@@ -71,16 +71,17 @@ export class TrolleyController {
   
   /**
    * Calculate X positions for all 5 tracks
+   * Must match TrackGenerator spacing: trackWidth * 2.0
    */
   private calculateTrackPositions(): number[] {
-    const trackWidth = this.config.tracks.width;
+    const trackSpacing = this.config.tracks.width * 2.0; // Match TrackGenerator spacing
     const trackCount = this.config.tracks.count;
-    const totalWidth = (trackCount - 1) * trackWidth;
+    const totalWidth = (trackCount - 1) * trackSpacing;
     const startX = -totalWidth / 2;
     
     const positions: number[] = [];
     for (let i = 0; i < trackCount; i++) {
-      positions.push(startX + i * trackWidth);
+      positions.push(startX + i * trackSpacing);
     }
     
     return positions;
@@ -300,8 +301,8 @@ export class TrolleyController {
    */
   public reset(): void {
   this._position.set(0, 0, 2); // Start on the first track segment near z=0
-    this._currentTrack = 1;
-    this._targetTrack = 1;
+    this._currentTrack = 3; // Start on track 3 (center track, matches single track)
+    this._targetTrack = 3;
     this._speed = this._baseSpeed;
     this._isTransitioning = false;
     this._transitionProgress = 0;

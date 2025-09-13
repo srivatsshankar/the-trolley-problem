@@ -148,7 +148,7 @@ describe('Game Systems Integration Tests', () => {
       // Verify initial state
       expect(gameState.score).toBe(0);
       expect(gameState.currentSegment).toBe(0);
-      expect(trolleyController.currentTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
       expect(trolleyController.speed).toBe(gameConfig.trolley.baseSpeed);
       
       // Cleanup
@@ -269,10 +269,10 @@ describe('Game Systems Integration Tests', () => {
       trolleyController.createTrolley();
       
       // Test track switching
-      expect(trolleyController.currentTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
       
-      trolleyController.switchToTrack(3);
-      expect(trolleyController.targetTrack).toBe(3);
+      trolleyController.switchToTrack(1);
+      expect(trolleyController.targetTrack).toBe(1);
       expect(trolleyController.isTransitioning).toBe(true);
       
       // Update until transition completes

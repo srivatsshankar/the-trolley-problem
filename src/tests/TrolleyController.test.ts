@@ -105,8 +105,8 @@ describe('TrolleyController', () => {
 
   describe('Initialization', () => {
     it('should initialize with correct default values', () => {
-      expect(trolleyController.currentTrack).toBe(1);
-      expect(trolleyController.targetTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
+      expect(trolleyController.targetTrack).toBe(3);
       expect(trolleyController.speed).toBe(mockConfig.trolley.baseSpeed);
       expect(trolleyController.baseSpeed).toBe(mockConfig.trolley.baseSpeed);
       expect(trolleyController.segmentsPassed).toBe(0);
@@ -125,9 +125,9 @@ describe('TrolleyController', () => {
       });
     });
 
-    it('should start trolley on center track (track 1)', () => {
+    it('should start trolley on center track (track 3)', () => {
       const position = trolleyController.position;
-      const centerTrackPosition = trolleyController.getTrackPosition(1);
+      const centerTrackPosition = trolleyController.getTrackPosition(3);
       expect(position.x).toBe(centerTrackPosition);
     });
   });
@@ -145,11 +145,11 @@ describe('TrolleyController', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       
       trolleyController.switchToTrack(0); // Invalid
-      expect(trolleyController.targetTrack).toBe(1); // Should remain unchanged
+      expect(trolleyController.targetTrack).toBe(3); // Should remain unchanged
       expect(trolleyController.isTransitioning).toBe(false);
       
       trolleyController.switchToTrack(6); // Invalid
-      expect(trolleyController.targetTrack).toBe(1); // Should remain unchanged
+      expect(trolleyController.targetTrack).toBe(3); // Should remain unchanged
       expect(trolleyController.isTransitioning).toBe(false);
       
       expect(consoleSpy).toHaveBeenCalledTimes(2);
@@ -157,9 +157,9 @@ describe('TrolleyController', () => {
     });
 
     it('should not start transition if already on target track', () => {
-      expect(trolleyController.currentTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
       
-      trolleyController.switchToTrack(1); // Same track
+      trolleyController.switchToTrack(3); // Same track
       expect(trolleyController.isTransitioning).toBe(false);
     });
 
@@ -242,7 +242,7 @@ describe('TrolleyController', () => {
       
       expect(trolleyController.transitionProgress).toBeCloseTo(0.5, 2);
       expect(trolleyController.isTransitioning).toBe(true);
-      expect(trolleyController.currentTrack).toBe(1); // Should still be original track
+      expect(trolleyController.currentTrack).toBe(3); // Should still be original track
       
       // Complete the transition
       trolleyController.update(0.5);
@@ -252,10 +252,10 @@ describe('TrolleyController', () => {
     });
 
     it('should interpolate position smoothly during transition', () => {
-      const startPosition = trolleyController.getTrackPosition(1);
-      const endPosition = trolleyController.getTrackPosition(3);
+      const startPosition = trolleyController.getTrackPosition(3);
+      const endPosition = trolleyController.getTrackPosition(5);
       
-      trolleyController.switchToTrack(3);
+      trolleyController.switchToTrack(5);
       trolleyController.update(0.5); // 50% progress
       
       // Position should be between start and end
@@ -283,7 +283,7 @@ describe('TrolleyController', () => {
       
       const state = trolleyController.getState();
       
-      expect(state.currentTrack).toBe(1);
+      expect(state.currentTrack).toBe(3);
       expect(state.targetTrack).toBe(4);
       expect(state.speed).toBeCloseTo(mockConfig.trolley.baseSpeed * 1.03, 5);
       expect(state.isTransitioning).toBe(true);
@@ -301,15 +301,15 @@ describe('TrolleyController', () => {
       // Reset
       trolleyController.reset();
       
-      expect(trolleyController.currentTrack).toBe(1);
-      expect(trolleyController.targetTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
+      expect(trolleyController.targetTrack).toBe(3);
       expect(trolleyController.speed).toBe(mockConfig.trolley.baseSpeed);
       expect(trolleyController.segmentsPassed).toBe(0);
       expect(trolleyController.isTransitioning).toBe(false);
       expect(trolleyController.transitionProgress).toBe(0);
       
       const position = trolleyController.position;
-      expect(position.x).toBe(trolleyController.getTrackPosition(1));
+      expect(position.x).toBe(trolleyController.getTrackPosition(3));
       expect(position.y).toBe(0);
       expect(position.z).toBe(2); // Start on the first track segment
     });

@@ -7,7 +7,7 @@ export class GameState {
   private _peopleHit: number = 0;
   private _peopleAvoided: number = 0;
   private _currentSegment: number = 0;
-  private _currentTrackPosition: number = 1; // Start on track 1
+  private _currentTrackPosition: number = 3; // Start on track 3 (center track)
   private _isGameOver: boolean = false;
   private _isPaused: boolean = false;
   private _hitBarrier: boolean = false;
@@ -181,7 +181,7 @@ export class GameState {
     this._peopleHit = 0;
     this._peopleAvoided = 0;
     this._currentSegment = 0;
-    this._currentTrackPosition = 1;
+    this._currentTrackPosition = 3;
     this._isGameOver = false;
     this._isPaused = false;
     this._hitBarrier = false;
@@ -213,7 +213,7 @@ export class GameState {
       this._peopleHit = state.peopleHit || 0;
       this._peopleAvoided = state.peopleAvoided || 0;
       this._currentSegment = state.currentSegment || 0;
-      this._currentTrackPosition = state.currentTrackPosition || 1;
+      this._currentTrackPosition = state.currentTrackPosition || 3;
       this._isGameOver = state.isGameOver || false;
       this._isPaused = state.isPaused || false;
       this._hitBarrier = state.hitBarrier || false;

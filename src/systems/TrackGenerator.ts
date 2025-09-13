@@ -121,13 +121,15 @@ export class TrackGenerator {
   /**
    * Generate single track for initial segments
    * Requirement 3.1: Trolley starts on single track
+   * Position single track to align with track 3 (center) of multi-track segments
    */
   private generateSingleTrack(_segmentIndex: number, basePosition: THREE.Vector3): Track[] {
     const trackId = this.getNextTrackId();
     const trackPosition = basePosition.clone();
     
-    // Center the single track
-    trackPosition.x = 0;
+    // Position single track to align with center track (track 3) of multi-track segments
+    // This ensures smooth transition from single track to multi-track
+    trackPosition.x = 0; // Center position matches track 3 in multi-track layout
     trackPosition.y = 0;
     
     const track = createTrack(trackId, trackPosition, 'NORMAL');
