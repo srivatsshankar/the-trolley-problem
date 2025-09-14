@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curved Railway Tracks Test - Trolley Problem Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        <div>Curved Railway Tracks Test</div>
+        <div>Realistic curved tracks with parallel rails and wooden ties</div>
+        <div>Watch how tracks smoothly connect different segments</div>
+    </div>
+    <div id="controls">
+        <div>Controls:</div>
+        <div>1-5: Create curved track to track number</div>
+        <div>C: Clear all curved tracks</div>
+        <div>R: Reset camera</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { CurvedRailwayTrack, createCurvedRailwayTrack } from './src/models/CurvedRailwayTrack.js';
+        import { createRailwayTrack, DEFAULT_RAILWAY_CONFIG } from './src/models/RailwayTrack.js';
+
+        console.log('Curved Railway Tracks Test - Starting...');
+
+        // Get canvas element
+        const canvas = document.getElementById('gameCanvas');
+
+        // Three.js setup
+        let scene, camera, renderer, controls;
+        let curvedTracks = [];
+        let straightTracks = [];
+
+        function initializeThreeJS() {
+            console.log('Initializing Three.js...');
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create perspective camera for better 3D view
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+
+            // Position camera for good view of tracks
+            camera.position.set(15, 10, 15);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(20, 20, 20);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            console.log('Three.js initialized successfully!');
+        }
+
+        function createTestEnvironment() {
+            console.log('Creating test environment...');
+
+            // Create ground
+            const groundGeometry = new THREE.PlaneGeometry(100, 100);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Create straight railway tracks (5 tracks)
+            const trackSpacing = DEFAULT_RAILWAY_CONFIG.railSpacing + 1.0; // Space between track centers
+            const trackCount = 5;
+            const startOffset = -(trackCount - 1) * trackSpacing / 2;
+
+            for (let i = 0; i < trackCount; i++) {
+                const trackX = startOffset + i * trackSpacing;
+                
+                // Create multiple segments for each track
+                for (let segment = 0; segment < 3; segment++) {
+                    const trackZ = segment * DEFAULT_RAILWAY_CONFIG.length;
+                    const position = new THREE.Vector3(trackX, 0, trackZ);
+                    
+                    const track = createRailwayTrack(
+                        i * 10 + segment,
+                        position,
+                        'NORMAL'
+                    );
+                    
+                    scene.add(track.group);
+                    straightTracks.push(track);
+                }
+            }
+
+            console.log('Test environment created successfully!');
+        }
+
+        function createCurvedTrack(targetTrackNumber) {
+            if (targetTrackNumber < 1 || targetTrackNumber > 5) {
+                console.warn('Invalid track number:', targetTrackNumber);
+                return;
+            }
+
+            // Calculate track positions
+            const trackSpacing = DEFAULT_RAILWAY_CONFIG.railSpacing + 1.0;
+            const trackCount = 5;
+            const startOffset = -(trackCount - 1) * trackSpacing / 2;
+            
+            const currentTrackX = 0; // Start from center track
+            const targetTrackX = startOffset + (targetTrackNumber - 1) * trackSpacing;
+
+            // Create smooth curved transition
+            const startZ = -10;
+            const endZ = 20;
+            
+            const curve = CurvedRailwayTrack.createTrackTransition(
+                currentTrackX,
+                targetTrackX,
+                startZ,
+                endZ,
+                0.1
+            );
+
+            // Create curved railway track
+            const curvedTrack = createCurvedRailwayTrack(curve, 'SELECTED', {
+                curveSegments: 32,
+                tieSpacing: DEFAULT_RAILWAY_CONFIG.tieSpacing
+            });
+
+            scene.add(curvedTrack.group);
+            curvedTracks.push(curvedTrack);
+
+            console.log(`Created curved track to track ${targetTrackNumber}`);
+        }
+
+        function clearCurvedTracks() {
+            curvedTracks.forEach(track => {
+                scene.remove(track.group);
+                track.dispose();
+            });
+            curvedTracks = [];
+            console.log('Cleared all curved tracks');
+        }
+
+        function resetCamera() {
+            camera.position.set(15, 10, 15);
+            camera.lookAt(0, 0, 0);
+            console.log('Camera reset');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Simple camera rotation for better viewing
+            const time = Date.now() * 0.0005;
+            camera.position.x = Math.cos(time) * 20;
+            camera.position.z = Math.sin(time) * 20;
+            camera.lookAt(0, 0, 0);
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Handle keyboard input
+        window.addEventListener('keydown', (event) => {
+            const key = event.key.toLowerCase();
+            
+            if (key >= '1' && key <= '5') {
+                const trackNumber = parseInt(key);
+                createCurvedTrack(trackNumber);
+            } else if (key === 'c') {
+                clearCurvedTracks();
+            } else if (key === 'r') {
+                resetCamera();
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // Initialize and start
+        initializeThreeJS();
+        createTestEnvironment();
+        animate();
+
+        // Create an initial curved track for demonstration
+        setTimeout(() => {
+            createCurvedTrack(3);
+        }, 1000);
+    </script>
+</body>
+
+</html>

@@ -107,7 +107,7 @@ describe('InputManager', () => {
     expect(inputManager.getSelectionQueue()[0].trackNumber).toBe(5);
   });
   
-  test('should process segment entry and apply track selection', () => {
+  test('should process segment entry and apply track selection at end of segment', () => {
     const switchToTrackSpy = vi.spyOn(trolleyController, 'switchToTrack');
     
     inputManager.mount();
@@ -115,19 +115,26 @@ describe('InputManager', () => {
     // Select track 4
     inputManager.selectTrack(4);
     
-    // Simulate trolley moving to trigger segment entry
+    // Simulate trolley moving to trigger segment entry (entering segment 1)
     const segmentLength = DEFAULT_CONFIG.tracks.segmentLength;
     trolleyController.setPosition(new THREE.Vector3(0, 0, segmentLength + 1));
     
-    // Update input manager to process segment entry
+    // Update input manager to process segment entry (schedules change)
     inputManager.update(0.016);
-    
-    // Should have called switchToTrack
+
+    // Should NOT have called switchToTrack yet (only scheduled)
+    expect(switchToTrackSpy).not.toHaveBeenCalled();
+
+    // Move to end of the segment (cross boundary to segment 2)
+    trolleyController.setPosition(new THREE.Vector3(0, 0, 2 * segmentLength + 1));
+    inputManager.update(0.016);
+
+    // Should now have called switchToTrack at the end of segment 1
     expect(switchToTrackSpy).toHaveBeenCalledWith(4);
     
-    // Queue entry should be marked as processed
-    const queue = inputManager.getSelectionQueue();
-    expect(queue).toHaveLength(0); // Processed entries are removed
+    // Queue entry should be removed after processing
+    const queueAfter = inputManager.getSelectionQueue();
+    expect(queueAfter).toHaveLength(0);
   });
   
   test('should handle multiple queued selections for different segments', () => {

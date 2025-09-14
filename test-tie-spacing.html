@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Railway Tie Spacing Test - Fixed</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            cursor: grab;
+        }
+        
+        #gameCanvas:active {
+            cursor: grabbing;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        <div>Railway Tie Spacing Test - FIXED</div>
+        <div>✓ Consistent tie spacing across segment boundaries</div>
+        <div>✓ No more double ties at segment joints</div>
+        <div>✓ Global tie grid alignment</div>
+        <div>Mouse: Drag to rotate camera</div>
+        <div>Scroll: Zoom in/out</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { createRailwayTrack } from './src/models/RailwayTrack.js';
+
+        console.log('Railway Tie Spacing Test - Starting...');
+
+        let scene, camera, renderer;
+        let isMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+
+        // Get canvas element
+        const canvas = document.getElementById('gameCanvas');
+
+        function init() {
+            console.log('Initializing tie spacing test...');
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue
+
+            // Create camera with isometric-like view
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(15, 10, 15);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 50, 25);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            createTestTracks();
+            setupControls();
+            animate();
+        }
+
+        function createTestTracks() {
+            console.log('Creating railway tracks with fixed tie spacing...');
+
+            // Create ground
+            const groundGeometry = new THREE.PlaneGeometry(100, 200);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Create 3 consecutive railway track segments to test tie spacing
+            const segmentLength = 25.0; // Match DEFAULT_CONFIG.tracks.segmentLength
+            const trackPositions = [
+                new THREE.Vector3(0, 0, -segmentLength), // Segment at Z = -25
+                new THREE.Vector3(0, 0, 0),              // Segment at Z = 0  
+                new THREE.Vector3(0, 0, segmentLength)   // Segment at Z = 25
+            ];
+
+            trackPositions.forEach((position, index) => {
+                const railwayTrack = createRailwayTrack(index, position, 'NORMAL', {
+                    length: segmentLength
+                });
+                
+                scene.add(railwayTrack.group);
+                console.log(`Created railway track segment ${index} at position:`, position);
+            });
+
+            // Add markers at segment boundaries to visualize the fix
+            const markerGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2);
+            const markerMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            
+            // Markers at segment boundaries
+            [-segmentLength/2, segmentLength/2, segmentLength + segmentLength/2].forEach((z, index) => {
+                const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                marker.position.set(3, 1, z);
+                scene.add(marker);
+                console.log(`Added boundary marker ${index} at Z = ${z}`);
+            });
+
+            console.log('Railway tracks with fixed tie spacing created successfully!');
+        }
+
+        function setupControls() {
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('wheel', onMouseWheel);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onMouseDown(event) {
+            isMouseDown = true;
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        function onMouseMove(event) {
+            if (!isMouseDown) return;
+
+            const deltaX = event.clientX - mouseX;
+            const deltaY = event.clientY - mouseY;
+
+            // Rotate camera around the scene
+            const spherical = new THREE.Spherical();
+            spherical.setFromVector3(camera.position);
+            spherical.theta -= deltaX * 0.01;
+            spherical.phi += deltaY * 0.01;
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+            camera.position.setFromSpherical(spherical);
+            camera.lookAt(0, 0, 0);
+
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        function onMouseUp() {
+            isMouseDown = false;
+        }
+
+        function onMouseWheel(event) {
+            const scale = event.deltaY > 0 ? 1.1 : 0.9;
+            camera.position.multiplyScalar(scale);
+            
+            // Limit zoom
+            const distance = camera.position.length();
+            if (distance < 5) camera.position.normalize().multiplyScalar(5);
+            if (distance > 100) camera.position.normalize().multiplyScalar(100);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        // Start the test
+        init();
+    </script>
+</body>
+</html>

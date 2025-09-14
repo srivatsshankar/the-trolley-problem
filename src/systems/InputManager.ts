@@ -8,7 +8,10 @@ import { TrolleyController } from './TrolleyController';
 import { TrackGenerator } from './TrackGenerator';
 import { GameConfig } from '../models/GameConfig';
 import { PathPreviewSystem, createPathPreviewSystem } from './PathPreviewSystem';
+// Removed unused CurvedTrackSystem
+import { SegmentTransitionSystem, createSegmentTransitionSystem } from './SegmentTransitionSystem';
 import * as THREE from 'three';
+import { CurvedRailwayTrack } from '../models/CurvedRailwayTrack';
 
 export interface TrackSelectionQueue {
   trackNumber: number;
@@ -27,17 +30,18 @@ export interface PathPreview {
 export class InputManager {
   private trackSelector: TrackSelector;
   private trolleyController: TrolleyController;
-
   private gameConfig: GameConfig;
   private scene: THREE.Scene;
   
   // Track selection queuing system
   private selectionQueue: TrackSelectionQueue[] = [];
-
   private lastProcessedSegment: number = -1;
   
   // Enhanced path preview system
   private pathPreviewSystem: PathPreviewSystem;
+  
+  // Segment transition system (enforces end-of-segment switching)
+  private segmentTransitionSystem: SegmentTransitionSystem;
   
   // Legacy path preview system (for backward compatibility)
   private pathPreviews: Map<number, PathPreview> = new Map();
@@ -62,8 +66,11 @@ export class InputManager {
     // Create track selector UI component
     this.trackSelector = new TrackSelector(DEFAULT_TRACK_SELECTOR_CONFIG);
     
-    // Create enhanced path preview system
-    this.pathPreviewSystem = createPathPreviewSystem(scene, trolleyController, gameConfig);
+  // Create enhanced path preview system
+  this.pathPreviewSystem = createPathPreviewSystem(scene, trolleyController, gameConfig);
+    
+  // Create segment transition system to enforce end-of-segment switching
+  this.segmentTransitionSystem = createSegmentTransitionSystem(trolleyController, gameConfig);
     
     // Create materials for legacy path preview (backward compatibility)
     this.previewMaterial = new THREE.MeshLambertMaterial({
@@ -79,6 +86,16 @@ export class InputManager {
     });
     
     this.setupEventHandlers();
+
+    // Connect trolley transition callbacks to show/hide the physical curved connector
+    this.trolleyController.setTransitionCallbacks({
+      onStart: (curve) => {
+        this.pathPreviewSystem.showTransitionConnector(curve);
+      },
+      onEnd: () => {
+        this.pathPreviewSystem.removeTransitionConnector();
+      }
+    });
     console.log('[InputManager] Created with enhanced track selection and path preview system');
   }
   
@@ -193,11 +210,13 @@ export class InputManager {
     const currentX = this.trolleyController.getTrackPosition(currentTrack);
     const targetX = this.trolleyController.getTrackPosition(trackNumber);
     
-    // Create curved path geometry
-    const curve = new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(currentX, 0.1, segmentZ - segmentLength * 0.5),
-      new THREE.Vector3((currentX + targetX) / 2, 0.2, segmentZ - segmentLength * 0.25),
-      new THREE.Vector3(targetX, 0.1, segmentZ)
+    // Create smooth curved path geometry using improved curve generation
+    const curve = CurvedRailwayTrack.createTrackTransition(
+      currentX,
+      targetX,
+      segmentZ - segmentLength * 0.5,
+      segmentZ,
+      0.1
     );
     
     // const points = curve.getPoints(20);
@@ -227,6 +246,9 @@ export class InputManager {
     
     // Update enhanced path preview system
     this.pathPreviewSystem.update(deltaTime);
+    
+  // Update segment transition system (executes switches exactly at boundaries)
+  this.segmentTransitionSystem.update(deltaTime);
     
     // Check if trolley has entered a new segment
     const trolleyPosition = this.trolleyController.position;
@@ -268,14 +290,15 @@ export class InputManager {
     );
     
     if (queueEntry) {
-      // Apply track selection to trolley
-      this.trolleyController.switchToTrack(queueEntry.trackNumber);
+      // Schedule track selection for execution at the END of this segment
+      // This guarantees the actual switch happens exactly at the boundary
+      this.segmentTransitionSystem.scheduleTrackChange(queueEntry.trackNumber, segmentIndex);
       queueEntry.isProcessed = true;
       
       // Update path preview to solid (opaque)
       this.makePathPreviewSolid(segmentIndex);
       
-      console.log(`[InputManager] Applied track selection ${queueEntry.trackNumber} for segment ${segmentIndex}`);
+  console.log(`[InputManager] Scheduled track selection ${queueEntry.trackNumber} for end of segment ${segmentIndex}`);
     } else {
       // No selection queued, continue on current track
       const currentTrack = this.trolleyController.currentTrack;

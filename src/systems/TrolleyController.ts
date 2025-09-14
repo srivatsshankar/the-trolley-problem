@@ -9,6 +9,7 @@ import { Trolley, createTrolley } from '../models/Trolley';
 import { CollisionDetection, CollisionResult, createCollisionDetection } from './CollisionDetection';
 import { Obstacle } from '../models/Obstacle';
 import { Person } from '../models/Person';
+import { CurvedRailwayTrack } from '../models/CurvedRailwayTrack';
 
 export interface TrolleyState {
   position: THREE.Vector3;
@@ -28,6 +29,9 @@ export class TrolleyController {
   private _isTransitioning: boolean;
   private _transitionProgress: number;
   private _transitionDuration: number;
+  private transitionCurve?: THREE.Curve<THREE.Vector3>;
+  private transitionStartZ: number = 0;
+  private transitionEndZ: number = 0;
   private _segmentsPassed: number;
   private _lastSpeedSegmentIndex: number;
   
@@ -35,6 +39,10 @@ export class TrolleyController {
   private mesh?: THREE.Object3D;
   private trolley?: Trolley;
   private collisionDetection: CollisionDetection;
+  
+  // Optional callbacks for visual connectors during transitions
+  private onTransitionStartCb?: (curve: THREE.Curve<THREE.Vector3>) => void;
+  private onTransitionEndCb?: () => void;
   
   // Track positions (X coordinates for 5 tracks)
   private trackPositions: number[];
@@ -93,6 +101,7 @@ export class TrolleyController {
    */
   public update(deltaTime: number): void {
     // Update forward movement (Z-axis movement)
+    // We always advance Z linearly by speed; during transitions, X follows a curve
     this._position.z += this._speed * deltaTime;
     
     // Handle track switching animation
@@ -143,22 +152,40 @@ export class TrolleyController {
    * Requirement 5.3: Curved path animations
    */
   private updateTrackTransition(deltaTime: number): void {
+    // If we have a curve, drive X (and optional Y) from the curve based on Z progress
+    if (this.transitionCurve) {
+      const denom = Math.max(1e-6, this.transitionEndZ - this.transitionStartZ);
+      const linearT = THREE.MathUtils.clamp((this._position.z - this.transitionStartZ) / denom, 0, 1);
+      // Keep external progress for potential UI/debug
+      this._transitionProgress = linearT;
+      const t = this.smoothStep(linearT);
+      const p = this.transitionCurve.getPoint(t);
+      this._position.x = p.x;
+      // Keep trolley on ground with very slight lift for visual separation
+      this._position.y = 0; // flat, simple
+
+      if (linearT >= 1) {
+        // Transition complete
+        this._isTransitioning = false;
+        this._currentTrack = this._targetTrack;
+        this.transitionCurve = undefined;
+        this.onTransitionEndCb?.();
+      }
+      return;
+    }
+
+    // Fallback to simple lateral lerp if no curve present
     this._transitionProgress += deltaTime / this._transitionDuration;
-    
+    const startX = this.trackPositions[this._currentTrack - 1];
+    const endX = this.trackPositions[this._targetTrack - 1];
+    const t = this.smoothStep(this._transitionProgress);
+    this._position.x = THREE.MathUtils.lerp(startX, endX, t);
     if (this._transitionProgress >= 1.0) {
-      // Transition complete
       this._transitionProgress = 1.0;
       this._isTransitioning = false;
       this._currentTrack = this._targetTrack;
+      this.onTransitionEndCb?.();
     }
-    
-    // Calculate smooth curved interpolation between tracks
-    const startX = this.trackPositions[this._currentTrack - 1];
-    const endX = this.trackPositions[this._targetTrack - 1];
-    
-    // Use smooth step function for curved animation
-    const t = this.smoothStep(this._transitionProgress);
-    this._position.x = THREE.MathUtils.lerp(startX, endX, t);
   }
   
   /**
@@ -192,6 +219,31 @@ export class TrolleyController {
     this._targetTrack = trackNumber;
     this._isTransitioning = true;
     this._transitionProgress = 0;
+
+    // Prepare a smooth curved path between current and target tracks using improved curve generation
+    try {
+      const startX = this.trackPositions[this._currentTrack - 1];
+      const endX = this.trackPositions[trackNumber - 1];
+      const startZ = this._position.z;
+      const endZ = startZ + Math.max(this._speed, this._baseSpeed) * this._transitionDuration;
+      this.transitionStartZ = startZ;
+      this.transitionEndZ = endZ;
+      
+      // Use CurvedRailwayTrack helper for smooth S-curve transition
+      this.transitionCurve = CurvedRailwayTrack.createTrackTransition(
+        startX,
+        endX,
+        startZ,
+        endZ,
+        0.05 // Slight elevation for smooth transition
+      );
+      
+      // Notify listeners to render a temporary connector
+      this.onTransitionStartCb?.(this.transitionCurve);
+    } catch (e) {
+      console.warn('Failed to create transition curve, falling back to linear lerp', e);
+      this.transitionCurve = undefined;
+    }
     
     console.log(`Switching from track ${this._currentTrack} to track ${trackNumber}`);
   }
@@ -441,5 +493,16 @@ export class TrolleyController {
     }
     this.collisionDetection.dispose();
     this.mesh = undefined;
+  }
+
+  /**
+   * Register optional callbacks for transition visuals
+   */
+  public setTransitionCallbacks(callbacks: {
+    onStart?: (curve: THREE.Curve<THREE.Vector3>) => void;
+    onEnd?: () => void;
+  }): void {
+    this.onTransitionStartCb = callbacks.onStart;
+    this.onTransitionEndCb = callbacks.onEnd;
   }
 }

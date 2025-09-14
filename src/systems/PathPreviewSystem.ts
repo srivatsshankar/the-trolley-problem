@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import { TrolleyController } from './TrolleyController';
 import { GameConfig } from '../models/GameConfig';
+import { DEFAULT_RAILWAY_CONFIG } from '../models/RailwayTrack';
+import { CurvedRailwayTrack, createCurvedRailwayTrack } from '../models/CurvedRailwayTrack';
 
 export interface PathPreviewConfig {
   previewDistance: number;
@@ -20,11 +22,16 @@ export interface PathPreviewConfig {
 export interface CurvedPath {
   trackNumber: number;
   segmentIndex: number;
-  curve: THREE.QuadraticBezierCurve3;
-  mesh: THREE.Mesh;
+  curve: THREE.Curve<THREE.Vector3>;
+  curvedTrack: CurvedRailwayTrack;
   isTranslucent: boolean;
   opacity: number;
   animationPhase: number;
+}
+
+interface TransitionConnector {
+  curvedTrack: CurvedRailwayTrack;
+  curve: THREE.Curve<THREE.Vector3>;
 }
 
 export class PathPreviewSystem {
@@ -43,6 +50,9 @@ export class PathPreviewSystem {
   
   // Animation properties
   private animationTime: number = 0;
+  
+  // Temporary connector shown only during actual transition
+  private transitionConnector?: TransitionConnector;
   
   constructor(
     scene: THREE.Scene,
@@ -124,18 +134,22 @@ export class PathPreviewSystem {
       return;
     }
     
-    // Create tube geometry for the path
-    const geometry = new THREE.TubeGeometry(
-      curve,
-      this.config.curveSegments,
-      this.config.tubeRadius,
-      8,
-      false
-    );
+    // Create curved railway track with translucent appearance
+    const curvedTrack = createCurvedRailwayTrack(curve, 'NORMAL', {
+      curveSegments: this.config.curveSegments
+    });
     
-    // Create mesh with translucent material
-    const mesh = new THREE.Mesh(geometry, this.translucentMaterial.clone());
-    mesh.userData = {
+    // Make it translucent for preview
+    curvedTrack.updateColors(0xFFD700, 0xDDDD00); // Gold colors for preview
+    curvedTrack.group.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const material = child.material as THREE.Material;
+        material.transparent = true;
+        material.opacity = this.config.translucentOpacity;
+      }
+    });
+    
+    curvedTrack.group.userData = {
       type: 'path-preview',
       trackNumber,
       segmentIndex,
@@ -143,14 +157,14 @@ export class PathPreviewSystem {
     };
     
     // Add to scene
-    this.scene.add(mesh);
+    this.scene.add(curvedTrack.group);
     
     // Store path data
     const curvedPath: CurvedPath = {
       trackNumber,
       segmentIndex,
       curve,
-      mesh,
+      curvedTrack,
       isTranslucent: true,
       opacity: this.config.translucentOpacity,
       animationPhase: 0
@@ -158,7 +172,7 @@ export class PathPreviewSystem {
     
     this.activePaths.set(pathKey, curvedPath);
     
-    console.log(`[PathPreviewSystem] Created translucent path preview for track ${trackNumber}, segment ${segmentIndex}`);
+    console.log(`[PathPreviewSystem] Created translucent curved railway preview for track ${trackNumber}, segment ${segmentIndex}`);
   }
   
   /**
@@ -174,22 +188,26 @@ export class PathPreviewSystem {
       return;
     }
     
-    // Update material to opaque
-    if (path.mesh.material) {
-      (path.mesh.material as THREE.Material).dispose();
-    }
+    // Update curved track to opaque orange colors
+    path.curvedTrack.updateColors(0xFFA500, 0xFF8C00); // Orange colors for confirmed path
+    path.curvedTrack.group.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const material = child.material as THREE.Material;
+        material.transparent = false;
+        material.opacity = this.config.opaqueOpacity;
+      }
+    });
     
-    path.mesh.material = this.opaqueMaterial.clone();
     path.isTranslucent = false;
     path.opacity = this.config.opaqueOpacity;
     
-    console.log(`[PathPreviewSystem] Made path opaque for track ${trackNumber}, segment ${segmentIndex}`);
+    console.log(`[PathPreviewSystem] Made curved railway path opaque for track ${trackNumber}, segment ${segmentIndex}`);
   }
   
   /**
    * Create curved path geometry between current and target track
    */
-  private createCurvedPath(trackNumber: number, segmentIndex: number): THREE.QuadraticBezierCurve3 | null {
+  private createCurvedPath(trackNumber: number, segmentIndex: number): THREE.Curve<THREE.Vector3> | null {
     // Validate track number
     if (trackNumber < 1 || trackNumber > this.gameConfig.tracks.count) {
       console.warn(`[PathPreviewSystem] Invalid track number: ${trackNumber}`);
@@ -220,19 +238,16 @@ export class PathPreviewSystem {
       return null;
     }
     
-    // Create curved path with smooth bezier curve
+    // Create smooth S-curve transition using CurvedRailwayTrack helper
     const startZ = Math.max(trolleyPos.z, segmentZ - segmentLength * 0.8);
-    const endZ = segmentZ + segmentLength * 0.2;
-    const midZ = (startZ + endZ) / 2;
+    const endZ = segmentZ + segmentLength * 0.3;
     
-    // Control point for smooth curve
-    const controlX = (currentX + targetX) / 2;
-    const controlY = 0.3; // Slight elevation for visibility
-    
-    const curve = new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(currentX, 0.1, startZ),
-      new THREE.Vector3(controlX, controlY, midZ),
-      new THREE.Vector3(targetX, 0.1, endZ)
+    const curve = CurvedRailwayTrack.createTrackTransition(
+      currentX,
+      targetX,
+      startZ,
+      endZ,
+      0.05 // Slight elevation for visibility
     );
     
     return curve;
@@ -252,6 +267,11 @@ export class PathPreviewSystem {
     
     // Clean up old paths
     this.cleanupOldPaths();
+    
+    // Remove connector if not transitioning
+    if (!this.trolleyController.isTransitioning && this.transitionConnector) {
+      this.removeTransitionConnector();
+    }
   }
   
   /**
@@ -262,22 +282,31 @@ export class PathPreviewSystem {
     
     if (path.isTranslucent) {
       // Animate translucent paths with pulsing effect
-      const pulseIntensity = 0.5 + 0.3 * Math.sin(path.animationPhase * 2);
-      const material = path.mesh.material as THREE.MeshLambertMaterial;
-      
-      if (material.emissive) {
-        material.emissiveIntensity = pulseIntensity * 0.2;
-      }
-      
-      // Subtle opacity animation
       const baseOpacity = this.config.translucentOpacity;
-      material.opacity = baseOpacity + 0.1 * Math.sin(path.animationPhase);
+      const animatedOpacity = baseOpacity + 0.1 * Math.sin(path.animationPhase);
+      
+      // Update opacity on all materials in the curved track
+      path.curvedTrack.group.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const material = child.material as THREE.Material;
+          if (material.transparent) {
+            material.opacity = animatedOpacity;
+          }
+        }
+      });
     } else {
-      // Animate opaque paths with steady glow
-      const material = path.mesh.material as THREE.MeshLambertMaterial;
-      if (material.emissive) {
-        material.emissiveIntensity = 0.3 + 0.1 * Math.sin(path.animationPhase * 0.5);
-      }
+      // Animate opaque paths with subtle glow variation
+      const glowIntensity = 0.8 + 0.2 * Math.sin(path.animationPhase * 0.5);
+      
+      // Update materials for subtle animation
+      path.curvedTrack.group.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const material = child.material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial;
+          if ('emissiveIntensity' in material) {
+            material.emissiveIntensity = glowIntensity * 0.1;
+          }
+        }
+      });
     }
   }
   
@@ -298,13 +327,21 @@ export class PathPreviewSystem {
       visibilityFactor = Math.max(0.1, 1.0 - (segmentDistance - 2) * 0.3);
     }
     
-    // Update material opacity
-    const material = path.mesh.material as THREE.MeshLambertMaterial;
+    // Update material opacity on all components
     const baseOpacity = path.isTranslucent ? this.config.translucentOpacity : this.config.opaqueOpacity;
-    material.opacity = baseOpacity * visibilityFactor;
+    const targetOpacity = baseOpacity * visibilityFactor;
+    
+    path.curvedTrack.group.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const material = child.material as THREE.Material;
+        if (material.transparent || path.isTranslucent) {
+          material.opacity = targetOpacity;
+        }
+      }
+    });
     
     // Hide very distant or irrelevant paths
-    path.mesh.visible = visibilityFactor > 0.05;
+    path.curvedTrack.group.visible = visibilityFactor > 0.05;
   }
   
   /**
@@ -315,13 +352,10 @@ export class PathPreviewSystem {
     if (!path) return;
     
     // Remove from scene
-    this.scene.remove(path.mesh);
+    this.scene.remove(path.curvedTrack.group);
     
-    // Dispose of geometry and material
-    path.mesh.geometry.dispose();
-    if (path.mesh.material) {
-      (path.mesh.material as THREE.Material).dispose();
-    }
+    // Dispose of curved track resources
+    path.curvedTrack.dispose();
     
     // Remove from storage
     this.activePaths.delete(pathKey);
@@ -363,16 +397,27 @@ export class PathPreviewSystem {
     
     if (!path) return;
     
-    // Temporarily change material to glow material
-    const originalMaterial = path.mesh.material;
-    path.mesh.material = this.glowMaterial.clone();
+    // Store original colors
+    const originalColors: { rail: number; tie: number } = { rail: 0, tie: 0 };
+    path.curvedTrack.group.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const material = child.material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial;
+        if (child.userData.type === 'curved-rail') {
+          originalColors.rail = material.color.getHex();
+        } else if (child.userData.type === 'curved-tie') {
+          originalColors.tie = material.color.getHex();
+        }
+      }
+    });
+    
+    // Temporarily change to bright green glow
+    path.curvedTrack.updateColors(0x00FF00, 0x00AA00);
     
     // Revert after short duration
     setTimeout(() => {
-      if (path.mesh.material) {
-        (path.mesh.material as THREE.Material).dispose();
+      if (!path.curvedTrack.isTrackDisposed()) {
+        path.curvedTrack.updateColors(originalColors.rail, originalColors.tie);
       }
-      path.mesh.material = originalMaterial;
     }, 500);
   }
   
@@ -399,7 +444,7 @@ export class PathPreviewSystem {
    */
   public setVisible(visible: boolean): void {
     this.activePaths.forEach(path => {
-      path.mesh.visible = visible;
+      path.curvedTrack.group.visible = visible;
     });
   }
   
@@ -425,6 +470,37 @@ export class PathPreviewSystem {
       this.opaqueMaterial.opacity = this.config.opaqueOpacity;
     }
   }
+
+  /**
+   * Create a temporary curved railway connector matching existing track aesthetics
+   */
+  public showTransitionConnector(curve: THREE.Curve<THREE.Vector3>): void {
+    // Remove previous if any
+    this.removeTransitionConnector();
+
+    // Create realistic curved railway track for transition
+    const curvedTrack = createCurvedRailwayTrack(curve, 'NORMAL', {
+      curveSegments: Math.max(24, this.config.curveSegments),
+      tieSpacing: DEFAULT_RAILWAY_CONFIG.tieSpacing * 1.5 // Slightly wider spacing for performance
+    });
+
+    curvedTrack.group.userData.type = 'transition-connector';
+    this.scene.add(curvedTrack.group);
+    
+    this.transitionConnector = { curvedTrack, curve };
+    
+    console.log('[PathPreviewSystem] Created realistic curved railway transition connector');
+  }
+
+  public removeTransitionConnector(): void {
+    if (!this.transitionConnector) return;
+    
+    this.scene.remove(this.transitionConnector.curvedTrack.group);
+    this.transitionConnector.curvedTrack.dispose();
+    this.transitionConnector = undefined;
+    
+    console.log('[PathPreviewSystem] Removed curved railway transition connector');
+  }
   
   /**
    * Dispose of all resources
@@ -432,6 +508,8 @@ export class PathPreviewSystem {
   public dispose(): void {
     // Clear all paths
     this.clearAllPaths();
+    // Remove temporary connector if present
+    this.removeTransitionConnector();
     
     // Dispose of materials
     this.translucentMaterial.dispose();

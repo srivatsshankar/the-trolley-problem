@@ -25,7 +25,7 @@ export class RailwayTrack {
   public readonly id: number;
   public readonly position: THREE.Vector3;
   public readonly group: THREE.Group;
-  
+
   private config: RailwayTrackConfig;
   private rails: THREE.Mesh[] = [];
   private ties: THREE.Mesh[] = [];
@@ -35,21 +35,21 @@ export class RailwayTrack {
     this.id = id;
     this.position = position.clone();
     this.config = config;
-    
+
     // Create group to hold all track components
     this.group = new THREE.Group();
     this.group.position.copy(this.position);
-    
+
     // Set user data for identification
     this.group.userData = {
       type: 'railway-track',
       id: this.id
     };
-    
+
     // Create track components
     this.createTies();
     this.createRails();
-    
+
     // Enable shadows
     this.group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
@@ -61,6 +61,7 @@ export class RailwayTrack {
 
   /**
    * Create wooden railway ties (sleepers)
+   * Fixed to ensure proper spacing across segment boundaries
    */
   private createTies(): void {
     const tieGeometry = new THREE.BoxGeometry(
@@ -68,30 +69,44 @@ export class RailwayTrack {
       this.config.tieHeight,
       this.config.tieWidth
     );
-    
+
     const tieMaterial = new THREE.MeshLambertMaterial({
       color: this.config.tieColor
     });
-    
-    // Calculate number of ties needed
-    const tieCount = Math.floor(this.config.length / this.config.tieSpacing) + 1;
-    const startZ = -this.config.length / 2;
-    
-    for (let i = 0; i < tieCount; i++) {
-      const tie = new THREE.Mesh(tieGeometry, tieMaterial);
-      
-      // Position tie along the track
-      tie.position.set(
-        0,
-        this.config.tieHeight / 2,
-        startZ + (i * this.config.tieSpacing)
-      );
-      
-      // Mark as tie for material updates
-      tie.userData = { type: 'tie' };
-      
-      this.ties.push(tie);
-      this.group.add(tie);
+
+    // Calculate global tie positions to ensure consistent spacing across segments
+    // Use the track's global Z position to determine where ties should be placed
+    const globalStartZ = this.position.z - this.config.length / 2;
+    const globalEndZ = this.position.z + this.config.length / 2;
+
+    // Find the first tie position that should be within this segment
+    // Align ties to a global grid starting at Z=0
+    const firstGlobalTieIndex = Math.ceil(globalStartZ / this.config.tieSpacing);
+    const lastGlobalTieIndex = Math.floor(globalEndZ / this.config.tieSpacing);
+
+    for (let globalTieIndex = firstGlobalTieIndex; globalTieIndex <= lastGlobalTieIndex; globalTieIndex++) {
+      const globalTieZ = globalTieIndex * this.config.tieSpacing;
+
+      // Convert global position to local position within this track segment
+      const localTieZ = globalTieZ - this.position.z;
+
+      // Only create tie if it's within the segment bounds (with small tolerance)
+      if (Math.abs(localTieZ) <= this.config.length / 2 + 0.01) {
+        const tie = new THREE.Mesh(tieGeometry, tieMaterial);
+
+        // Position tie along the track (local coordinates)
+        tie.position.set(
+          0,
+          this.config.tieHeight / 2,
+          localTieZ
+        );
+
+        // Mark as tie for material updates
+        tie.userData = { type: 'tie' };
+
+        this.ties.push(tie);
+        this.group.add(tie);
+      }
     }
   }
 
@@ -104,14 +119,14 @@ export class RailwayTrack {
       this.config.railHeight,
       this.config.length
     );
-    
+
     const railMaterial = new THREE.MeshStandardMaterial({
       color: this.config.railColor,
       metalness: 0.8,
       roughness: 0.2,
       emissive: 0x111111
     });
-    
+
     // Create left rail
     const leftRail = new THREE.Mesh(railGeometry, railMaterial);
     leftRail.position.set(
@@ -120,7 +135,7 @@ export class RailwayTrack {
       0
     );
     leftRail.userData = { type: 'rail' };
-    
+
     // Create right rail
     const rightRail = new THREE.Mesh(railGeometry, railMaterial.clone());
     rightRail.position.set(
@@ -129,7 +144,7 @@ export class RailwayTrack {
       0
     );
     rightRail.userData = { type: 'rail' };
-    
+
     this.rails.push(leftRail, rightRail);
     this.group.add(leftRail);
     this.group.add(rightRail);
@@ -201,7 +216,7 @@ export class RailwayTrack {
    */
   public dispose(): void {
     if (this.isDisposed) return;
-    
+
     // Dispose geometries and materials
     this.ties.forEach(tie => {
       tie.geometry.dispose();
@@ -211,7 +226,7 @@ export class RailwayTrack {
         tie.material.dispose();
       }
     });
-    
+
     this.rails.forEach(rail => {
       rail.geometry.dispose();
       if (Array.isArray(rail.material)) {
@@ -220,12 +235,12 @@ export class RailwayTrack {
         rail.material.dispose();
       }
     });
-    
+
     // Remove from parent if it has one
     if (this.group.parent) {
       this.group.parent.remove(this.group);
     }
-    
+
     this.isDisposed = true;
   }
 
@@ -269,8 +284,8 @@ export const RAILWAY_COLORS = {
  * Utility function to create railway track with specific colors
  */
 export function createRailwayTrack(
-  id: number, 
-  position: THREE.Vector3, 
+  id: number,
+  position: THREE.Vector3,
   colorType: 'NORMAL' | 'SELECTED' | 'DANGER' = 'NORMAL',
   customConfig?: Partial<RailwayTrackConfig>
 ): RailwayTrack {
@@ -280,6 +295,6 @@ export function createRailwayTrack(
     tieColor: RAILWAY_COLORS[`${colorType}_TIE` as keyof typeof RAILWAY_COLORS],
     ...customConfig
   };
-  
+
   return new RailwayTrack(id, position, config);
 }
