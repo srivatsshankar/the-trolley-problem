@@ -12,6 +12,7 @@ export interface SceneManagerConfig {
     backgroundColor: number;
     cameraDistance: number;
     cameraHeight: number;
+    frustumSize?: number; // Optional override for camera frustum size
 }
 
 export class SceneManager {
@@ -72,9 +73,9 @@ export class SceneManager {
     private setupCamera(): void {
         // Calculate camera bounds for isometric view
         const aspect = window.innerWidth / window.innerHeight;
-        // Increased frustum size for better mobile visibility (from 20 to 35)
-        // This allows players to see more of the track system and game objects
-        const frustumSize = 35;
+        // Use configurable frustum size or fallback to default
+        // Increased from 35 to 65 to ensure at least 2 sections are visible
+        const frustumSize = this.config.frustumSize ?? 65;
         
         // Create orthographic camera for true isometric view
         this.camera = new THREE.OrthographicCamera(
@@ -97,7 +98,7 @@ export class SceneManager {
         // Look at the center of the scene
         this.camera.lookAt(0, 0, 0);
         
-        this.log(`Isometric camera positioned at (${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z})`);
+        this.log(`Isometric camera positioned at (${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z}) with frustum size ${frustumSize}`);
     }
     
     /**

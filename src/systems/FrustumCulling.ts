@@ -36,6 +36,8 @@ export interface CullingConfig {
     medium: number;
     low: number;
   };
+  /** Additional distance ahead to preload content */
+  preloadDistance: number;
 }
 
 /**
@@ -84,6 +86,7 @@ export class FrustumCullingSystem {
         medium: 100,
         low: 200
       },
+      preloadDistance: 40, // Preload content 40 units ahead
       ...config
     };
   }
@@ -184,10 +187,13 @@ export class FrustumCullingSystem {
     object.getWorldPosition(this.tempVector);
     const distanceToCamera = this.camera.position.distanceTo(this.tempVector);
 
-    // Distance culling
+    // Distance culling - but extend distance for preloading
     if (this.config.enableDistanceCulling && shouldBeVisible) {
-      const cullDistance = customCullDistance || this.config.priorityDistances[priority];
-      if (distanceToCamera > cullDistance) {
+      const baseCullDistance = customCullDistance || this.config.priorityDistances[priority];
+      // Extend culling distance with preload distance for better content visibility
+      const effectiveCullDistance = baseCullDistance + this.config.preloadDistance;
+      
+      if (distanceToCamera > effectiveCullDistance) {
         shouldBeVisible = false;
         this.stats.culledByDistance++;
       }

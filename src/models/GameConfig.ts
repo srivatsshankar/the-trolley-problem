@@ -25,6 +25,12 @@ export interface GameConfig {
   rendering: {
     viewDistance: number;
     maxVisibleSegments: number;
+    /** Minimum number of sections that should be visible on screen at all times */
+    minSectionsInView: number;
+    /** Number of sections to preload content ahead of the player */
+    previewSectionsAhead: number;
+    /** Camera frustum size for orthographic camera */
+    cameraFrustumSize: number;
   };
   scoring: {
     pointsPerPersonAvoided: number;
@@ -56,7 +62,13 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
   rendering: {
     viewDistance: 150.0, // Increased for longer segments
-    maxVisibleSegments: 8 // Fewer segments needed due to increased length
+    maxVisibleSegments: 8, // Fewer segments needed due to increased length
+    /** Minimum number of sections that should be visible on screen at all times */
+    minSectionsInView: 2.5, // Show at least 2.5 sections for better gameplay
+    /** Number of sections to preload content ahead of the player */
+    previewSectionsAhead: 1.5, // Preload content 1.5 sections ahead
+    /** Camera frustum size for orthographic camera */
+    cameraFrustumSize: 65 // Increased from 35 to show more content
   },
   scoring: {
     pointsPerPersonAvoided: 1,

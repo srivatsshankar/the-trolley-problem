@@ -275,6 +275,7 @@ export class TrackGenerator {
   * Progressive track generation based on camera/trolley position
    * Requirement 7.3: Progressive generation
    * Improved with buffer zone to prevent pauses during gameplay
+   * Updated to use configurable preview sections ahead for better visibility
    */
   public updateGeneration(currentPosition: THREE.Vector3): void {
     const currentZ = currentPosition.z;
@@ -284,10 +285,15 @@ export class TrackGenerator {
     // Calculate progress within current segment (0.0 to 1.0)
     const segmentProgress = (currentZ % segmentLength) / segmentLength;
     
+    // Use configurable preview sections ahead from game config
+    const sectionsAhead = this.gameConfig.rendering.previewSectionsAhead;
+    // Convert sections to segments (1 section = 2.5 segments based on game design)
+    const segmentsAhead = Math.ceil(sectionsAhead * 2.5);
+    
     // Generate ahead segments with buffer zone
     // Start generating when 60% through current segment to avoid pauses
     const bufferZoneThreshold = 0.6;
-    const baseGenerateAhead = Math.ceil(this.generationConfig.maxVisibleSegments / 2);
+    const baseGenerateAhead = Math.max(segmentsAhead, Math.ceil(this.generationConfig.maxVisibleSegments / 2));
     
     // Add extra lookahead when approaching segment boundary
     const extraLookahead = segmentProgress > bufferZoneThreshold ? 2 : 0;
@@ -323,9 +329,19 @@ export class TrackGenerator {
   /**
    * Update segment visibility based on view distance
    * Requirement 10.1: Only display necessary elements on screen
+   * Updated to ensure minimum sections are always visible
    */
   private updateSegmentVisibility(currentPosition: THREE.Vector3): void {
-    const viewDistance = this.generationConfig.viewDistance;
+    const baseViewDistance = this.generationConfig.viewDistance;
+    
+    // Calculate extended view distance to ensure minimum sections are visible
+    const minSectionsInView = this.gameConfig.rendering.minSectionsInView;
+    const segmentLength = this.gameConfig.tracks.segmentLength;
+    // 1 section = 2.5 segments, so we need enough distance for minSectionsInView
+    const minViewDistance = minSectionsInView * segmentLength * 2.5;
+    
+    // Use the larger of the two distances to ensure visibility requirements are met
+    const viewDistance = Math.max(baseViewDistance, minViewDistance);
     
     this.segments.forEach((segment, _segmentId) => {
       const distance = Math.abs(segment.position.z - currentPosition.z);
@@ -348,7 +364,7 @@ export class TrackGenerator {
       }
     });
 
-    // Update content visibility
+    // Update content visibility with extended distance
     this.contentManager.updateContentVisibility(currentPosition, viewDistance);
   }
 

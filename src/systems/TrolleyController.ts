@@ -34,6 +34,7 @@ export class TrolleyController {
   private transitionEndZ: number = 0;
   private _segmentsPassed: number;
   private _lastSpeedSegmentIndex: number;
+  private _rockingBoostEnabled: boolean = false;
   
   private config: GameConfig;
   private mesh?: THREE.Object3D;
@@ -259,6 +260,13 @@ export class TrolleyController {
    const rawMultiplier = Math.pow(1 + this.config.trolley.speedIncrease, this._segmentsPassed);
    const clampedMultiplier = Math.min(this.config.trolley.maxSpeedMultiplier, rawMultiplier);
    this._speed = this._baseSpeed * clampedMultiplier;
+   // Enable slight rocking boost starting at the 5th segment
+   if (!this._rockingBoostEnabled && this._segmentsPassed >= 5) {
+     this._rockingBoostEnabled = true;
+     if (this.trolley) {
+       this.trolley.setRockingBoost(true);
+     }
+   }
     
    console.log(`Speed increased to ${this._speed.toFixed(2)} (${(this._speed/this._baseSpeed).toFixed(2)}x base) after ${this._segmentsPassed} segments`);
   }
@@ -319,6 +327,8 @@ export class TrolleyController {
   public createTrolley(): Trolley {
     this.trolley = createTrolley();
     this.trolley.setPosition(this._position);
+    // Apply any milestone-based visual states (e.g., rocking boost)
+    this.trolley.setRockingBoost(this._rockingBoostEnabled);
     return this.trolley;
   }
   
@@ -362,6 +372,7 @@ export class TrolleyController {
     this._transitionProgress = 0;
     this._segmentsPassed = 0;
   this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
+    this._rockingBoostEnabled = false;
     
   // Set X position to current track
     this._position.x = this.trackPositions[this._currentTrack - 1];
@@ -372,6 +383,7 @@ export class TrolleyController {
     
     if (this.trolley) {
       this.trolley.setPosition(this._position);
+      this.trolley.setRockingBoost(false);
       this.trolley.showDirectionIndicator('none');
     }
   }

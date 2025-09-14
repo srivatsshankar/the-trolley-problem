@@ -55,6 +55,8 @@ export class Trolley {
   private rockingOffset: number = 0;
   private smokeTime: number = 0;
   private flickerTime: number = 0;
+  private rockingAmplitudeBase: number = 0.03;
+  private rockingBoost: number = 0;
   // Optional real-time window reflections
   private cubeCamera?: THREE.CubeCamera;
   private reflectionScene?: THREE.Scene;
@@ -418,7 +420,7 @@ export class Trolley {
     // Add gentle side-to-side rocking when moving
     if (speed > 0) {
       this.rockingOffset += deltaTime * speed * 0.8;
-      const rockingAmplitude = 0.03;
+      const rockingAmplitude = this.rockingAmplitudeBase + this.rockingBoost;
       const rocking = Math.sin(this.rockingOffset) * rockingAmplitude;
       this.group.rotation.z = rocking;
     }
@@ -457,6 +459,20 @@ export class Trolley {
 
     // Update smoke animation
     this.updateSmoke(deltaTime);
+  }
+
+  /**
+   * Adjust base rocking amplitude.
+   */
+  public setRockingBaseAmplitude(value: number): void {
+    this.rockingAmplitudeBase = Math.max(0, value);
+  }
+
+  /**
+   * Enable/disable a temporary rocking boost (e.g., after a segment milestone).
+   */
+  public setRockingBoost(enabled: boolean): void {
+    this.rockingBoost = enabled ? 0.012 : 0; // slight extra tilt
   }
 
   /**
@@ -542,6 +558,25 @@ export class Trolley {
    */
   public getGroup(): THREE.Group {
     return this.group;
+  }
+
+  /**
+   * Get the world-space contact points for each wheel (bottom center of each wheel)
+   * Useful for placing ground-level effects like sparks or dust.
+   */
+  public getWheelContactPoints(): THREE.Vector3[] {
+    const contacts: THREE.Vector3[] = [];
+    for (const wheel of this.wheels) {
+      // Local bottom point of the wheel
+      const local = new THREE.Vector3(
+        wheel.position.x,
+        wheel.position.y - this.config.wheelSize.height / 2,
+        wheel.position.z
+      );
+      const world = this.group.localToWorld(local.clone());
+      contacts.push(world);
+    }
+    return contacts;
   }
   
   /**

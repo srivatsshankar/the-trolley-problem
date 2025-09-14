@@ -14,6 +14,7 @@ import { createTrackStopper } from './models/TrackStopper';
 import { InputManager } from './systems/InputManager';
 import { GameState } from './models/GameState';
 import { ContentManager } from './systems/ContentManager';
+import { VisualEffectsSystem } from './systems/VisualEffectsSystem';
 
 
 console.log('Trolley Problem Game - Starting with menu system...');
@@ -46,6 +47,8 @@ let groundSystem: GroundSystem | null = null;
 let inputManager: InputManager | null = null;
 let gameState: GameState | null = null;
 let contentManager: ContentManager | null = null;
+let visualEffectsSystem: VisualEffectsSystem | null = null;
+let wheelSparksEnabled = false;
 
 let currentSection: number = -1;
 
@@ -172,6 +175,16 @@ function initializeGame(): void {
             gameState
         );
         inputManager.mount();
+
+        // Initialize visual effects system (no camera follow; CameraController manages camera)
+        visualEffectsSystem = new VisualEffectsSystem(
+            scene,
+            camera,
+            trolleyController,
+            DEFAULT_CONFIG,
+            { enableCameraFollow: false }
+        );
+        visualEffectsSystem.setWheelSparksEnabled(false);
         
         // Start game animation loop
         startGameAnimationLoop();
@@ -230,6 +243,17 @@ function gameAnimationLoop(): void {
             trackGenerator.updateGeneration(trolleyPosition);
             trackGenerator.update(0.016); // Update content animations
         }
+
+        // Enable wheel sparks after 5 sections (each section = 2.5 segments)
+        if (visualEffectsSystem && !wheelSparksEnabled) {
+            const sectionLength = DEFAULT_CONFIG.tracks.segmentLength * 2.5;
+            const sectionsPassed = Math.floor(trolleyPosition.z / sectionLength);
+            if (sectionsPassed >= 5) {
+                visualEffectsSystem.setWheelSparksEnabled(true);
+                wheelSparksEnabled = true;
+                console.log('Wheel sparks enabled after 5 sections (main.ts)');
+            }
+        }
         
     // No hard reset: allow TrackGenerator to stream segments endlessly
     }
@@ -242,6 +266,11 @@ function gameAnimationLoop(): void {
     // Update input manager (handles button-to-queue and previews)
     if (inputManager) {
         inputManager.update(0.016);
+    }
+
+    // Update visual effects per frame
+    if (visualEffectsSystem) {
+        visualEffectsSystem.update(0.016);
     }
 
     // Handle collisions and scoring

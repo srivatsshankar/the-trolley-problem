@@ -14,6 +14,7 @@ import { CameraController } from './systems/CameraController';
 import { TrolleyController } from './systems/TrolleyController';
 import { GroundSystem } from './systems/GroundSystem';
 import { createTrackStopper } from './models/TrackStopper';
+import { VisualEffectsSystem } from './systems/VisualEffectsSystem';
 
 export enum GamePhase {
   MENU = 'menu',
@@ -36,6 +37,8 @@ export class GameController {
   private trolleyController: TrolleyController;
   private gameConfig: GameConfig;
   private groundSystem: GroundSystem | null = null;
+  private visualEffectsSystem: VisualEffectsSystem | null = null;
+  private wheelSparksEnabled: boolean = false;
 
   // Game state
   private gameState: GameState;
@@ -62,7 +65,8 @@ export class GameController {
 
     this.sceneManager = new SceneManager({
       ...DEFAULT_SCENE_CONFIG,
-      canvas: config.canvas
+      canvas: config.canvas,
+      frustumSize: this.gameConfig.rendering.cameraFrustumSize
     });
 
     // Initialize track generator (will be set up after scene is ready)
@@ -152,6 +156,17 @@ export class GameController {
 
     // Don't set camera target immediately - wait for gameplay to start
 
+    // Initialize visual effects (disable camera follow to avoid conflict with CameraController)
+    this.visualEffectsSystem = new VisualEffectsSystem(
+      this.sceneManager.getScene(),
+      this.sceneManager.getCamera(),
+      this.trolleyController,
+      this.gameConfig,
+      { enableCameraFollow: false }
+    );
+    // Start with sparks disabled; will enable after threshold
+    this.visualEffectsSystem.setWheelSparksEnabled(false);
+
     this.log('Basic scene created with ground, proper track system, track stopper, and trolley');
   }
 
@@ -190,6 +205,14 @@ export class GameController {
       this.trackGenerator.update(deltaTime);
 
   // No forced reset: tracks are generated endlessly; camera continues following
+      // Enable wheel sparks after crossing threshold sections (each section = 2.5 segments)
+      const sectionLength = this.gameConfig.tracks.segmentLength * 2.5;
+      const sectionsPassed = Math.floor(trolleyPosition.z / sectionLength);
+      if (!this.wheelSparksEnabled && sectionsPassed >= 5) {
+        this.visualEffectsSystem?.setWheelSparksEnabled(true);
+        this.wheelSparksEnabled = true;
+        this.log('Wheel sparks enabled after 5 sections');
+      }
     }
 
     // Update camera to follow trolley
@@ -199,6 +222,11 @@ export class GameController {
     if (this.groundSystem) {
       const target = this.trolleyController ? this.trolleyController.position : this.sceneManager.getCamera().position;
       this.groundSystem.update(target);
+    }
+
+    // Update visual effects
+    if (this.visualEffectsSystem) {
+      this.visualEffectsSystem.update(deltaTime);
     }
 
     // Log status periodically
@@ -349,6 +377,9 @@ export class GameController {
 
     // Dispose trolley controller
     if (this.trolleyController) this.trolleyController.dispose();
+
+  // Dispose visual effects
+  if (this.visualEffectsSystem) this.visualEffectsSystem.dispose();
 
     // Dispose track generator
     if (this.trackGenerator) this.trackGenerator.dispose();

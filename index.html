@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Trolley Problem</title>
     <style>
         body {
@@ -12,19 +12,32 @@
             background-color: #87CEEB;
             font-family: Arial, sans-serif;
             touch-action: manipulation; /* Improves touch responsiveness */
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
         }
         
         #gameCanvas {
             display: block;
             width: 100vw;
+            /* Fallback first */
             height: 100vh;
+            /* Prefer dynamic viewport height to avoid browser UI bars causing mismatch */
+            height: 100dvh;
             touch-action: none; /* Prevents default touch behaviors on canvas */
+            margin: 0;
+            padding: 0;
+            border: 0;
+            outline: 0;
         }
         
         #gameContainer {
             position: relative;
             width: 100vw;
+            /* Fallback first */
             height: 100vh;
+            /* Match canvas sizing to prevent overlay gaps */
+            height: 100dvh;
         }
         
         #ui-overlay {
@@ -49,6 +62,13 @@
             <!-- UI elements will be added here by the game -->
         </div>
     </div>
+    <script>
+        // On some mobile browsers, 100vh can include browser UI; listen for orientation changes
+        window.addEventListener('orientationchange', () => {
+            // Trigger a resize so main.ts recalculates sizes
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+        });
+    </script>
     <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

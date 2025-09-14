@@ -17,6 +17,7 @@ export interface VisualEffectsConfig {
   enableParticles: boolean;
   enableCameraFollow: boolean;
   enableSpeedIndicators: boolean;
+  enableWheelSparks?: boolean;
 }
 
 export interface ParticleEffect {
@@ -28,7 +29,7 @@ export interface ParticleEffect {
   color: THREE.Color;
   size: number;
   mesh: THREE.Mesh;
-  type: 'collision' | 'speed' | 'track-switch' | 'explosion';
+  type: 'collision' | 'speed' | 'track-switch' | 'explosion' | 'spark';
 }
 
 export interface SpeedIndicator {
@@ -49,6 +50,11 @@ export class VisualEffectsSystem {
   private activeParticles: Map<string, ParticleEffect> = new Map();
   private particleGeometry: THREE.SphereGeometry = new THREE.SphereGeometry(0.1, 8, 6);
   private particleMaterials: Map<string, THREE.MeshBasicMaterial> = new Map();
+  // Wheel sparks
+  private wheelSparkEnabled: boolean = false;
+  private lastSparkTime: number = 0;
+  private sparkInterval: number = 0.045; // slightly faster bursts
+  private sparkColorPalette: number[] = [0xFFD166, 0xFCA311, 0xFF6B35, 0xFFE066];
   
   // Camera following
   private targetCameraPosition: THREE.Vector3 = new THREE.Vector3();
@@ -84,6 +90,7 @@ export class VisualEffectsSystem {
       enableParticles: true,
       enableCameraFollow: true,
       enableSpeedIndicators: true,
+      enableWheelSparks: true,
       ...config
     };
     
@@ -124,6 +131,13 @@ export class VisualEffectsSystem {
       color: 0xFFAA00,
       transparent: true,
       opacity: 0.9
+    }));
+
+    // Blocky spark material (emissive-like)
+    this.particleMaterials.set('spark', new THREE.MeshBasicMaterial({
+      color: 0xFFD166,
+      transparent: true,
+      opacity: 0.95
     }));
   }
   
@@ -300,7 +314,7 @@ export class VisualEffectsSystem {
   private createParticle(params: {
     position: THREE.Vector3;
     velocity: THREE.Vector3;
-    type: 'collision' | 'speed' | 'track-switch' | 'explosion';
+    type: 'collision' | 'speed' | 'track-switch' | 'explosion' | 'spark';
     lifetime: number;
     size: number;
   }): void {
@@ -355,6 +369,91 @@ export class VisualEffectsSystem {
       this.updateSpeedIndicators(deltaTime);
       this.updateDifficultyIndicator(deltaTime);
     }
+
+    // Update wheel sparks
+    if (this.wheelSparkEnabled && this.config.enableParticles && (this.config.enableWheelSparks ?? true)) {
+      this.updateWheelSparks(deltaTime);
+    }
+  }
+
+  /**
+   * Toggle wheel sparks
+   */
+  public setWheelSparksEnabled(enabled: boolean): void {
+    this.wheelSparkEnabled = enabled;
+  }
+
+  /**
+   * Emit blocky, cartoonish sparks at the trolley wheels.
+   * Creates tiny cubes with bright warm colors that burst backward.
+   */
+  private updateWheelSparks(deltaTime: number): void {
+    this.lastSparkTime += deltaTime;
+    if (this.lastSparkTime < this.sparkInterval) return;
+    this.lastSparkTime = 0;
+
+    const trolley = this.trolleyController.getTrolley();
+    if (!trolley) return;
+
+    const contacts = trolley.getWheelContactPoints();
+    const speed = this.trolleyController.speed;
+    if (speed <= 0) return;
+
+  const baseCount = 6; // larger burst for drama
+  const size = 0.055; // slightly larger cubes
+  const lifetime = 0.6; // a bit longer-lived
+
+    const trolleyPos = this.trolleyController.position;
+    for (const c of contacts) {
+      const sideSign = Math.sign(c.x - trolleyPos.x) || (Math.random() < 0.5 ? -1 : 1);
+      for (let i = 0; i < baseCount; i++) {
+        // Backward-biased velocity with stronger outward lateral component
+        const lateral = sideSign * (0.6 + Math.random() * 1.4); // push to sides
+        const vx = lateral + (Math.random() - 0.5) * 0.4; // add jitter
+        const vy = Math.random() * 1.2 + 0.6; // a bit higher
+        const vz = -(
+          1.2 + Math.random() * 1.2 + Math.min(speed * 0.18, 3.0)
+        ) + (Math.random() - 0.5) * 0.6; // backward with some spread
+
+        const colorHex = this.sparkColorPalette[(Math.random() * this.sparkColorPalette.length) | 0];
+        this.particleMaterials.get('spark')?.color.set(colorHex);
+
+        this.createBlockyParticle({
+          position: c.clone().add(new THREE.Vector3(0, 0.02, 0)),
+          velocity: new THREE.Vector3(vx, vy, vz),
+          lifetime: lifetime * (0.8 + Math.random() * 0.7),
+          size: size * (0.8 + Math.random() * 0.6)
+        });
+      }
+    }
+  }
+
+  /**
+   * Create a blocky particle using a small BoxGeometry to emphasize the voxel/cartoon style.
+   */
+  private createBlockyParticle(params: { position: THREE.Vector3; velocity: THREE.Vector3; lifetime: number; size: number; }): void {
+    const id = `particle_${this.particleIdCounter++}`;
+    const material = this.particleMaterials.get('spark');
+    if (!material) return;
+
+    const geometry = new THREE.BoxGeometry(params.size, params.size, params.size);
+    const mesh = new THREE.Mesh(geometry, material.clone());
+    mesh.position.copy(params.position);
+
+    const particle: ParticleEffect = {
+      id,
+      position: params.position.clone(),
+      velocity: params.velocity.clone(),
+      lifetime: params.lifetime,
+      maxLifetime: params.lifetime,
+      color: new THREE.Color((mesh.material as THREE.MeshBasicMaterial).color),
+      size: params.size,
+      mesh,
+      type: 'spark'
+    };
+
+    this.activeParticles.set(id, particle);
+    this.scene.add(mesh);
   }
   
   /**
@@ -380,6 +479,11 @@ export class VisualEffectsSystem {
       if (particle.type === 'collision' || particle.type === 'explosion') {
         particle.velocity.y -= 9.8 * deltaTime; // Gravity
       }
+      if (particle.type === 'spark') {
+        // Light gravity and drag to curve trajectories
+        particle.velocity.y -= 7.5 * deltaTime;
+        particle.velocity.multiplyScalar(0.982);
+      }
       
       // Update opacity based on lifetime
       const lifetimeRatio = particle.lifetime / particle.maxLifetime;
@@ -390,6 +494,11 @@ export class VisualEffectsSystem {
       if (particle.type === 'explosion') {
         const scale = 1 + (1 - lifetimeRatio) * 2;
         particle.mesh.scale.setScalar(scale);
+      }
+      if (particle.type === 'spark') {
+        // Fade quicker and keep blocky size constant for a chunky look
+        const material = particle.mesh.material as THREE.MeshBasicMaterial;
+        material.opacity = Math.max(0, lifetimeRatio * 0.9);
       }
     });
     
@@ -605,7 +714,8 @@ export const DEFAULT_VISUAL_EFFECTS_CONFIG: VisualEffectsConfig = {
   difficultyIndicatorThreshold: 5.0,
   enableParticles: true,
   enableCameraFollow: true,
-  enableSpeedIndicators: true
+  enableSpeedIndicators: true,
+  enableWheelSparks: true
 };
 
 /**
