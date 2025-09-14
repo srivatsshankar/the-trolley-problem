@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Content Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .info {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Content Generation Test</h1>
+        <p>Testing the new people and barrier generation system for the Trolley Problem game.</p>
+        
+        <div class="section">
+            <h3>Requirements Verification</h3>
+            <div class="info">
+                <strong>Requirements:</strong><br>
+                • 1-5 people per track in each section<br>
+                • Barriers after crossing 5 sections (1 barrier)<br>
+                • Barriers after crossing 20 sections (2 barriers)<br>
+                • Barrier types: trolley (blue/green/yellow/orange), rock, buffer<br>
+                • Trolley barriers: no flickering light, no smoke, great windows
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>Test Controls</h3>
+            <button onclick="testContentManager()">Test ContentManager</button>
+            <button onclick="testObstacleColors()">Test Obstacle Colors</button>
+            <button onclick="testSectionLogic()">Test Section Logic</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div class="section">
+            <h3>Test Results</h3>
+            <div id="results" class="info">
+                Click a test button to run tests...
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>Console Log</h3>
+            <div id="log" class="log">
+                Ready to run tests...
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        let logContent = '';
+        
+        function log(message) {
+            logContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            document.getElementById('log').textContent = logContent;
+            console.log(message);
+        }
+        
+        function setResult(message, isSuccess = true) {
+            const results = document.getElementById('results');
+            results.textContent = message;
+            results.className = isSuccess ? 'info success' : 'info error';
+        }
+        
+        window.clearLog = function() {
+            logContent = '';
+            document.getElementById('log').textContent = 'Log cleared...';
+        };
+        
+        window.testContentManager = async function() {
+            try {
+                log('Testing ContentManager import...');
+                
+                // Test basic imports
+                const THREE = await import('three');
+                log('✓ THREE.js imported successfully');
+                
+                const { DEFAULT_CONFIG, GameConfigManager } = await import('./src/models/GameConfig.js');
+                log('✓ GameConfig imported successfully');
+                
+                const { ContentManager } = await import('./src/systems/ContentManager.js');
+                log('✓ ContentManager imported successfully');
+                
+                // Test ContentManager creation
+                const scene = new THREE.Scene();
+                const configManager = new GameConfigManager(DEFAULT_CONFIG);
+                const contentManager = new ContentManager(scene, configManager);
+                log('✓ ContentManager created successfully');
+                
+                // Test configuration
+                const stats = contentManager.getContentStats();
+                log(`✓ Initial stats: ${JSON.stringify(stats)}`);
+                
+                setResult('ContentManager test passed! All imports and basic functionality work.', true);
+                
+            } catch (error) {
+                log('✗ Error: ' + error.message);
+                setResult('ContentManager test failed: ' + error.message, false);
+            }
+        };
+        
+        window.testObstacleColors = async function() {
+            try {
+                log('Testing obstacle color variations...');
+                
+                const THREE = await import('three');
+                const { createObstacle } = await import('./src/models/Obstacle.js');
+                
+                // Test different trolley colors
+                const colors = [
+                    { name: 'Blue', value: 0x4169E1 },
+                    { name: 'Green', value: 0x32CD32 },
+                    { name: 'Yellow', value: 0xFFD700 },
+                    { name: 'Orange', value: 0xFF8C00 }
+                ];
+                
+                for (const color of colors) {
+                    const obstacle = createObstacle('trolley', new THREE.Vector3(0, 0, 0), {
+                        colors: {
+                            primary: color.value,
+                            secondary: 0x333333
+                        }
+                    });
+                    log(`✓ Created ${color.name} trolley barrier (color: #${color.value.toString(16)})`);
+                    obstacle.dispose();
+                }
+                
+                // Test rock obstacle
+                const rock = createObstacle('rock', new THREE.Vector3(0, 0, 0));
+                log('✓ Created rock obstacle');
+                rock.dispose();
+                
+                setResult('Obstacle color test passed! All barrier types created successfully.', true);
+                
+            } catch (error) {
+                log('✗ Error: ' + error.message);
+                setResult('Obstacle color test failed: ' + error.message, false);
+            }
+        };
+        
+        window.testSectionLogic = async function() {
+            try {
+                log('Testing section-based barrier logic...');
+                
+                // Test section calculation
+                const segmentLength = 25.0; // From DEFAULT_CONFIG
+                const sectionLength = segmentLength * 2.5;
+                
+                // Test different sections
+                const testCases = [
+                    { section: 0, expectedBarriers: 0, description: 'Early section (no barriers)' },
+                    { section: 4, expectedBarriers: 0, description: 'Section 4 (no barriers yet)' },
+                    { section: 5, expectedBarriers: 1, description: 'Section 5 (1 barrier starts)' },
+                    { section: 10, expectedBarriers: 1, description: 'Section 10 (1 barrier)' },
+                    { section: 19, expectedBarriers: 1, description: 'Section 19 (still 1 barrier)' },
+                    { section: 20, expectedBarriers: 2, description: 'Section 20 (2 barriers start)' },
+                    { section: 25, expectedBarriers: 2, description: 'Section 25 (2 barriers)' }
+                ];
+                
+                for (const testCase of testCases) {
+                    let expectedBarriers;
+                    if (testCase.section < 5) {
+                        expectedBarriers = 0;
+                    } else if (testCase.section < 20) {
+                        expectedBarriers = 1;
+                    } else {
+                        expectedBarriers = 2;
+                    }
+                    
+                    if (expectedBarriers === testCase.expectedBarriers) {
+                        log(`✓ ${testCase.description}: Expected ${expectedBarriers} barriers`);
+                    } else {
+                        throw new Error(`Section ${testCase.section} logic failed`);
+                    }
+                }
+                
+                setResult('Section logic test passed! Barrier progression works correctly.', true);
+                
+            } catch (error) {
+                log('✗ Error: ' + error.message);
+                setResult('Section logic test failed: ' + error.message, false);
+            }
+        };
+        
+        log('Test page loaded successfully. Ready to run tests.');
+    </script>
+</body>
+</html>

@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import { Track, createTrack } from '../models/Track';
 import { GameConfig } from '../models/GameConfig';
+import { ContentManager } from './ContentManager';
+import { GameConfigManager } from '../models/GameConfig';
 
 export interface TrackSegment {
   id: number;
@@ -35,6 +37,7 @@ export class TrackGenerator {
   private currentSegmentId: number = 0;
   private lastGeneratedSegment: number = -1;
   private scene: THREE.Scene;
+  private contentManager: ContentManager;
   
   // Track layout constants
   private readonly SINGLE_TRACK_SEGMENTS = 3; // Number of segments before splitting
@@ -51,7 +54,11 @@ export class TrackGenerator {
       ...generationConfig
     };
     
-    this.log('TrackGenerator initialized');
+    // Initialize content manager for people and barriers
+    const configManager = new GameConfigManager(gameConfig);
+    this.contentManager = new ContentManager(scene, configManager);
+    
+    this.log('TrackGenerator initialized with ContentManager');
   }
 
   /**
@@ -118,6 +125,13 @@ export class TrackGenerator {
     segment.segmentMarkers.forEach(marker => {
       this.scene.add(marker);
     });
+
+    // Generate people and barriers for multi-track sections
+    if (!isSingleTrack) {
+      const sectionIndex = this.getCurrentSectionIndex(position);
+      const contentResult = this.contentManager.generateContentForSection(sectionIndex, segment.tracks.map(t => t.mesh));
+      this.log(`Content generation for section ${sectionIndex}: people=${contentResult.peopleGenerated}, barriers=${contentResult.barriersGenerated} (${contentResult.barrierCount})`);
+    }
 
     segment.isGenerated = true;
     segment.isVisible = true;
@@ -300,6 +314,13 @@ export class TrackGenerator {
   }
 
   /**
+   * Update content animations and systems
+   */
+  public update(deltaTime: number): void {
+    this.contentManager.update(deltaTime);
+  }
+
+  /**
    * Update segment visibility based on view distance
    * Requirement 10.1: Only display necessary elements on screen
    */
@@ -326,6 +347,9 @@ export class TrackGenerator {
         }
       }
     });
+
+    // Update content visibility
+    this.contentManager.updateContentVisibility(currentPosition, viewDistance);
   }
 
   /**
@@ -351,6 +375,10 @@ export class TrackGenerator {
     segmentsToRemove.forEach(segmentId => {
       const segment = this.segments.get(segmentId);
       if (segment) {
+        // Clean up content for this section
+        const sectionIndex = this.getCurrentSectionIndex(segment.position);
+        this.contentManager.cleanupContentForSection(sectionIndex);
+        
         // Remove tracks from scene and dispose
         segment.tracks.forEach(track => {
           this.scene.remove(track.mesh);
@@ -495,10 +523,20 @@ export class TrackGenerator {
   }
 
   /**
+   * Get content manager for external access
+   */
+  public getContentManager(): ContentManager {
+    return this.contentManager;
+  }
+
+  /**
    * Dispose of all resources
    */
   public dispose(): void {
     this.log('Disposing TrackGenerator...');
+    
+    // Dispose content manager
+    this.contentManager.dispose();
     
     // Dispose all segments
     this.segments.forEach(segment => {

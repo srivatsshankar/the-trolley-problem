@@ -63,8 +63,10 @@ export class ObstacleManager {
       // Add to scene
       this.scene.add(obstacle.getGroup());
       
-      // Store obstacle with unique key
-      const obstacleKey = `${segmentIndex}_${trackIndex}`;
+  // Store obstacle with unique key keyed by actual railway portion (segment) index based on Z
+  const portionLength = this.configManager.getConfig().tracks.segmentLength;
+  const keySegmentIndex = Math.floor(obstaclePosition.z / portionLength);
+  const obstacleKey = `${keySegmentIndex}_${trackIndex}`;
       this.obstacles.set(obstacleKey, obstacle);
       
       obstacles.push(obstacle);
@@ -104,9 +106,10 @@ export class ObstacleManager {
     const config = this.configManager.getConfig();
     const segmentLength = config.tracks.segmentLength;
     
-    // Place obstacle randomly within the segment, but not too close to edges
-    const minOffset = segmentLength * 0.2; // 20% from start
-    const maxOffset = segmentLength * 0.8; // 80% from start
+    // Place obstacle within the central band of the section rules (approximate per segment)
+    // Using 15% to 65% of the segment to align with section constraints when used standalone
+    const minOffset = segmentLength * 0.15; // 15% from start
+    const maxOffset = segmentLength * 0.65; // 65% from start
     const zOffset = minOffset + Math.random() * (maxOffset - minOffset);
     
     return new THREE.Vector3(
@@ -212,6 +215,33 @@ export class ObstacleManager {
     
     if (keysToRemove.length > 0) {
       this.log(`Removed ${keysToRemove.length} obstacles from segment ${segmentIndex}`);
+    }
+  }
+
+  /**
+   * Remove obstacles for a specific section (for cleanup)
+   */
+  public removeObstaclesForSection(sectionIndex: number): void {
+    const keysToRemove: string[] = [];
+    
+    this.obstacles.forEach((obstacle, key) => {
+      const [secIdx] = key.split('_').map(Number);
+      if (secIdx === sectionIndex) {
+        // Remove from scene
+        this.scene.remove(obstacle.getGroup());
+        
+        // Dispose resources
+        obstacle.dispose();
+        
+        keysToRemove.push(key);
+      }
+    });
+    
+    // Remove from map
+    keysToRemove.forEach(key => this.obstacles.delete(key));
+    
+    if (keysToRemove.length > 0) {
+      this.log(`Removed ${keysToRemove.length} obstacles from section ${sectionIndex}`);
     }
   }
 

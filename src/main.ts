@@ -12,6 +12,9 @@ import { DEFAULT_CONFIG } from './models/GameConfig';
 import { GroundSystem } from './systems/GroundSystem';
 import { createTrackStopper } from './models/TrackStopper';
 import { InputManager } from './systems/InputManager';
+import { GameState } from './models/GameState';
+import { ContentManager } from './systems/ContentManager';
+
 
 console.log('Trolley Problem Game - Starting with menu system...');
 
@@ -41,6 +44,10 @@ let gameStarted = false;
 let menuMode = true;
 let groundSystem: GroundSystem | null = null;
 let inputManager: InputManager | null = null;
+let gameState: GameState | null = null;
+let contentManager: ContentManager | null = null;
+
+let currentSection: number = -1;
 
 /**
  * Initialize Three.js scene, camera, and renderer (shared between menu and game)
@@ -148,12 +155,21 @@ function initializeGame(): void {
         
         console.log('Game initialized successfully!');
 
+        // Initialize game state
+        gameState = new GameState();
+
+
+
+        // Get content manager from track generator for collision detection
+        contentManager = trackGenerator.getContentManager();
+
         // Initialize input manager (track buttons + queuing) and mount UI
         inputManager = new InputManager(
             scene,
             trolleyController,
             trackGenerator,
-            DEFAULT_CONFIG
+            DEFAULT_CONFIG,
+            gameState
         );
         inputManager.mount();
         
@@ -212,6 +228,7 @@ function gameAnimationLoop(): void {
         // Update track generation based on trolley position
         if (trackGenerator) {
             trackGenerator.updateGeneration(trolleyPosition);
+            trackGenerator.update(0.016); // Update content animations
         }
         
     // No hard reset: allow TrackGenerator to stream segments endlessly
@@ -226,6 +243,76 @@ function gameAnimationLoop(): void {
     if (inputManager) {
         inputManager.update(0.016);
     }
+
+    // Handle collisions and scoring
+    if (contentManager && gameState && trolleyController && inputManager) {
+        // Get trolley bounding box from the trolley model
+        const trolley = trolleyController.getTrolley();
+        if (trolley) {
+            const trolleyBoundingBox = trolley.getBoundingBox();
+            const collisions = contentManager.checkCollisions(trolleyBoundingBox);
+            
+            // Process people collisions - just mark them as hit, don't update score yet
+            if (collisions.hitPeople.length > 0) {
+                // People are already marked as hit by the collision system
+                // Score will be calculated at section completion
+                console.log(`Hit ${collisions.hitPeople.length} people - score will be updated at section end`);
+            }
+            
+            // Process obstacle collisions (end game)
+            if (collisions.hitObstacle) {
+                gameState.processCollisionResults([{
+                    type: 'obstacle' as const,
+                    object: collisions.hitObstacle
+                }]);
+                
+                console.log('Game Over - Hit obstacle!');
+                // TODO: Show game over screen
+            }
+        }
+        
+        // Check for section completion to calculate people avoided
+        const trolleyZ = trolleyController.position.z;
+        const segmentLength = DEFAULT_CONFIG.tracks.segmentLength;
+        const newSection = Math.floor(trolleyZ / (segmentLength * 2.5)); // Sections are 2.5 segments long
+        
+        if (newSection > currentSection && currentSection >= 0) {
+            // Section completed - calculate people in this section
+            const peopleManager = contentManager.getPeopleManager();
+            
+            // Calculate which segments belong to the completed section
+            // Each section spans 2.5 segments
+            const sectionStartSegment = Math.floor(currentSection * 2.5);
+            const sectionEndSegment = Math.floor((currentSection + 1) * 2.5) - 1;
+            
+            let totalPeopleInSection = 0;
+            let hitPeopleInSection = 0;
+            
+            // Count people across all segments in this section
+            for (let segmentIndex = sectionStartSegment; segmentIndex <= sectionEndSegment; segmentIndex++) {
+                const segmentStats = peopleManager.getSegmentPeopleStats(segmentIndex);
+                totalPeopleInSection += segmentStats.total;
+                hitPeopleInSection += segmentStats.hit;
+            }
+            
+            if (totalPeopleInSection > 0) {
+                const peopleAvoidedInSection = totalPeopleInSection - hitPeopleInSection;
+                
+                // Update game state with section completion
+                gameState.processSegmentCompletion(totalPeopleInSection, hitPeopleInSection);
+                
+                // Show section completion score changes at bottom right
+                const scoreDisplay = inputManager.getScoreDisplay();
+                scoreDisplay.showSectionCompletion(hitPeopleInSection, peopleAvoidedInSection);
+                scoreDisplay.updateScore(gameState.score);
+                
+                console.log(`Section ${currentSection} completed - Total: ${totalPeopleInSection}, Hit: ${hitPeopleInSection}, Avoided: ${peopleAvoidedInSection}`);
+            }
+            
+
+        }
+        currentSection = newSection;
+    }
     
     // Log status every 60 frames
     if (frameCount % 60 === 0) {
@@ -234,6 +321,8 @@ function gameAnimationLoop(): void {
         const isFollowing = cameraController && cameraController.isFollowing() ? 'Yes' : 'No';
         const stats = trackGenerator ? trackGenerator.getGenerationStats() : null;
         console.log(`Game running - Trolley Z: ${trolleyZ}, Speed: ${trolleySpeed}, Camera Following: ${isFollowing}`, stats);
+        
+
     }
     
     if (renderer && scene && camera) {

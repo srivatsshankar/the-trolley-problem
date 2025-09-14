@@ -53,60 +53,61 @@ export class GameState {
    * Updates the score based on people hit and avoided in the current segment
    * Requirement 9.1: Add people not hit, subtract people hit
    * Requirement 9.2: Calculate score based on segment results
+   * Only people hit/avoided affect the score - nothing else
    */
   updateScore(peopleHitInSegment: number, peopleAvoidedInSegment: number): void {
     this._peopleHit += peopleHitInSegment;
     this._peopleAvoided += peopleAvoidedInSegment;
     
-    // Score calculation: add avoided, subtract hit
+    // Score calculation: ONLY based on people - add avoided, subtract hit
     this._score += peopleAvoidedInSegment - peopleHitInSegment;
   }
 
   /**
    * Process collision results and update game state accordingly
-   * Requirement 8.2: Track total people hit
-   * Requirement 8.3: Track total people avoided
    * Requirement 8.4: Track whether trolley hit a barrier
    * Requirement 9.3: End game when hitting barrier
+   * Note: People collisions don't update score here - only at section completion
    */
   processCollisionResults(collisionResults: Array<{type: 'obstacle' | 'person', object: any}>): void {
-    let peopleHitThisFrame = 0;
     let hitBarrier = false;
 
     for (const collision of collisionResults) {
       if (collision.type === 'obstacle') {
         hitBarrier = true;
-      } else if (collision.type === 'person') {
-        peopleHitThisFrame++;
       }
+      // People collisions are handled at section completion, not here
     }
 
-    // Update people hit count
-    if (peopleHitThisFrame > 0) {
-      this._peopleHit += peopleHitThisFrame;
-      // Subtract from score for people hit
-      this._score -= peopleHitThisFrame;
-    }
-
-    // End game if barrier was hit
+    // End game if barrier was hit (no score change for barriers)
     if (hitBarrier) {
       this.endGame(true);
     }
   }
 
   /**
-   * Process segment completion and calculate avoided people
-   * Requirement 8.3: Track total people avoided
-   * Requirement 9.1: Add people not hit to score
+   * Process section completion and calculate score based on people hit vs avoided
+   * Requirement 8.2: Track total people hit
+   * Requirement 8.3: Track total people avoided  
+   * Requirement 9.1: Add people not hit to score, subtract people hit
+   * Returns the score changes for display purposes
    */
-  processSegmentCompletion(totalPeopleInSegment: number, peopleHitInSegment: number): void {
-    const peopleAvoidedInSegment = totalPeopleInSegment - peopleHitInSegment;
+  processSegmentCompletion(totalPeopleInSection: number, peopleHitInSection: number): { peopleHit: number, peopleAvoided: number } {
+    const peopleAvoidedInSection = totalPeopleInSection - peopleHitInSection;
     
-    this._peopleAvoided += peopleAvoidedInSegment;
-    // Add to score for people avoided
-    this._score += peopleAvoidedInSegment;
+    // Update totals
+    this._peopleHit += peopleHitInSection;
+    this._peopleAvoided += peopleAvoidedInSection;
+    
+    // Update score: add points for people avoided, subtract for people hit
+    this._score += peopleAvoidedInSection - peopleHitInSection;
     
     this.incrementSegment();
+    
+    return {
+      peopleHit: peopleHitInSection,
+      peopleAvoided: peopleAvoidedInSection
+    };
   }
 
   /**

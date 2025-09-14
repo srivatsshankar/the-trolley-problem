@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>People Generation Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        
+        .test-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .section-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .section-card {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #555;
+        }
+        
+        .section-card.has-people {
+            border-color: #4CAF50;
+        }
+        
+        .section-card.no-people {
+            border-color: #f44336;
+        }
+        
+        .track-info {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 3px 6px;
+            background: #444;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        .track-info.has-people {
+            background: #2e5d2e;
+        }
+        
+        .track-info.has-barrier {
+            background: #5d2e2e;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        .stats {
+            background: #444;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .log {
+            background: #111;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>People Generation Test</h1>
+        <p>This test verifies that:</p>
+        <ul>
+            <li>All sections have people (including first 2 sections)</li>
+            <li>Each track without barriers has 1-5 people</li>
+            <li>No tracks are randomly missing people</li>
+        </ul>
+        
+        <div>
+            <button onclick="generateSections()">Generate Test Sections</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div class="stats" id="stats">
+            <h3>Statistics</h3>
+            <p>Total sections: <span id="total-sections">0</span></p>
+            <p>Sections with people: <span id="sections-with-people">0</span></p>
+            <p>Sections without people: <span id="sections-without-people">0</span></p>
+            <p>Total people generated: <span id="total-people">0</span></p>
+        </div>
+        
+        <div class="section-grid" id="section-grid"></div>
+        
+        <div class="log" id="log"></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ContentManager } from './src/systems/ContentManager.js';
+        import { GameConfigManager, DEFAULT_CONFIG } from './src/models/GameConfig.js';
+
+        // Mock scene
+        const scene = new THREE.Scene();
+        
+        // Create game config manager
+        const configManager = new GameConfigManager(DEFAULT_CONFIG);
+        
+        // Create content manager
+        const contentManager = new ContentManager(scene, configManager);
+
+        // Log function
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}<br>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // Clear log
+        window.clearLog = function() {
+            document.getElementById('log').innerHTML = '';
+        };
+
+        // Mock track segment generator
+        function createMockTrackSegment(segmentIndex) {
+            const segmentLength = DEFAULT_CONFIG.tracks.segmentLength;
+            const trackSpacing = DEFAULT_CONFIG.tracks.width * 2.0; // Match TrackGenerator spacing
+            
+            const tracks = [];
+            for (let i = 0; i < 5; i++) {
+                tracks.push({
+                    position: new THREE.Vector3(i * trackSpacing - 2 * trackSpacing, 0, segmentIndex * segmentLength),
+                    mesh: null // Mock mesh
+                });
+            }
+            
+            return {
+                id: segmentIndex,
+                tracks: tracks,
+                position: new THREE.Vector3(0, 0, segmentIndex * segmentLength),
+                startZ: segmentIndex * segmentLength,
+                endZ: (segmentIndex + 1) * segmentLength,
+                isVisible: true,
+                isGenerated: false
+            };
+        }
+
+        // Generate test sections
+        window.generateSections = function() {
+            log('Starting people generation test...');
+            
+            const sectionGrid = document.getElementById('section-grid');
+            sectionGrid.innerHTML = '';
+            
+            let totalSections = 0;
+            let sectionsWithPeople = 0;
+            let sectionsWithoutPeople = 0;
+            let totalPeople = 0;
+            
+            // Test first 10 sections (25 segments since each section = 2.5 segments)
+            for (let sectionIndex = 0; sectionIndex < 10; sectionIndex++) {
+                totalSections++;
+                
+                // Each section spans 2.5 segments, so test the middle segment of each section
+                const segmentIndex = Math.floor(sectionIndex * 2.5) + 1;
+                const segment = createMockTrackSegment(segmentIndex);
+                
+                log(`Testing section ${sectionIndex} (segment ${segmentIndex})`);
+                
+                // Generate content for this segment
+                const result = contentManager.generateContentForSegment(segment, segmentIndex);
+                
+                // Get people stats
+                const peopleManager = contentManager.getPeopleManager();
+                const peopleStats = peopleManager.getSegmentPeopleStats(segmentIndex);
+                
+                // Create section card
+                const sectionCard = document.createElement('div');
+                sectionCard.className = `section-card ${peopleStats.total > 0 ? 'has-people' : 'no-people'}`;
+                
+                let sectionHTML = `
+                    <h4>Section ${sectionIndex}</h4>
+                    <p>Segment: ${segmentIndex}</p>
+                    <p>Total People: ${peopleStats.total}</p>
+                    <p>Barriers: ${result.barrierCount}</p>
+                `;
+                
+                // Show track details
+                for (let trackIndex = 0; trackIndex < 5; trackIndex++) {
+                    const peopleOnTrack = peopleManager.getPeopleOnTrack(segmentIndex, trackIndex).length;
+                    const hasBarrier = result.affectedTracks.includes(trackIndex);
+                    
+                    const trackClass = hasBarrier ? 'has-barrier' : (peopleOnTrack > 0 ? 'has-people' : '');
+                    sectionHTML += `
+                        <div class="track-info ${trackClass}">
+                            <span>Track ${trackIndex}:</span>
+                            <span>${hasBarrier ? 'BARRIER' : `${peopleOnTrack} people`}</span>
+                        </div>
+                    `;
+                }
+                
+                sectionCard.innerHTML = sectionHTML;
+                sectionGrid.appendChild(sectionCard);
+                
+                // Update stats
+                if (peopleStats.total > 0) {
+                    sectionsWithPeople++;
+                } else {
+                    sectionsWithoutPeople++;
+                    log(`⚠️ Section ${sectionIndex} has NO people!`);
+                }
+                
+                totalPeople += peopleStats.total;
+                
+                log(`Section ${sectionIndex}: ${peopleStats.total} people, ${result.barrierCount} barriers`);
+            }
+            
+            // Update statistics display
+            document.getElementById('total-sections').textContent = totalSections;
+            document.getElementById('sections-with-people').textContent = sectionsWithPeople;
+            document.getElementById('sections-without-people').textContent = sectionsWithoutPeople;
+            document.getElementById('total-people').textContent = totalPeople;
+            
+            log(`Test completed: ${sectionsWithPeople}/${totalSections} sections have people`);
+            
+            if (sectionsWithoutPeople > 0) {
+                log(`❌ ISSUE: ${sectionsWithoutPeople} sections are missing people!`);
+            } else {
+                log(`✅ SUCCESS: All sections have people!`);
+            }
+        };
+
+        // Initialize
+        log('People generation test initialized');
+        log('Click "Generate Test Sections" to test the first 10 sections');
+    </script>
+</body>
+</html>

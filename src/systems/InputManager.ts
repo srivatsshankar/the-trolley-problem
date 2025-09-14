@@ -5,9 +5,11 @@
  */
 
 import { TrackSelector, DEFAULT_TRACK_SELECTOR_CONFIG } from '../components/TrackSelector';
+import { ScoreDisplay, DEFAULT_SCORE_DISPLAY_CONFIG } from '../components/ScoreDisplay';
 import { TrolleyController } from './TrolleyController';
 import { TrackGenerator } from './TrackGenerator';
 import { GameConfig } from '../models/GameConfig';
+import { GameState } from '../models/GameState';
 import { PathPreviewSystem, createPathPreviewSystem } from './PathPreviewSystem';
 // Removed unused CurvedTrackSystem and SegmentTransitionSystem (no queue needed)
 import * as THREE from 'three';
@@ -23,8 +25,10 @@ export interface PathPreview {
 
 export class InputManager {
   private trackSelector: TrackSelector;
+  private scoreDisplay: ScoreDisplay;
   private trolleyController: TrolleyController;
   private gameConfig: GameConfig;
+  private gameState: GameState;
   private scene: THREE.Scene;
 
   // Section-based state tracking (sections are 2.5x railway portions)
@@ -52,15 +56,20 @@ export class InputManager {
     scene: THREE.Scene,
     trolleyController: TrolleyController,
     trackGenerator: TrackGenerator,
-    gameConfig: GameConfig
+    gameConfig: GameConfig,
+    gameState?: GameState
   ) {
     this.scene = scene;
     this.trolleyController = trolleyController;
     this.trackGenerator = trackGenerator;
     this.gameConfig = gameConfig;
+    this.gameState = gameState || new GameState();
 
     // Create track selector UI component
     this.trackSelector = new TrackSelector(DEFAULT_TRACK_SELECTOR_CONFIG);
+    
+    // Create score display UI component
+    this.scoreDisplay = new ScoreDisplay(DEFAULT_SCORE_DISPLAY_CONFIG);
 
     // Create enhanced path preview system
     this.pathPreviewSystem = createPathPreviewSystem(scene, trolleyController, gameConfig);
@@ -125,9 +134,6 @@ export class InputManager {
       const trolleyPosition = this.trolleyController.position;
       const currentSection = this.trackGenerator.getCurrentSectionIndex(trolleyPosition);
       const sectionProgress = this.trackGenerator.getSectionProgress(trolleyPosition);
-      const sectionLength = this.trackGenerator.getSectionLength();
-      const distanceToSectionEnd = sectionLength * (1 - sectionProgress);
-      const previewThreshold = sectionLength * 0.3;
 
       // Update preview immediately since we show it throughout the section
       const currentTrack = this.trolleyController.currentTrack;
@@ -237,7 +243,8 @@ export class InputManager {
     // Update enhanced path preview system
     this.pathPreviewSystem.update(deltaTime);
 
-
+    // Update score display with current game state
+    this.scoreDisplay.updateScore(this.gameState.score);
 
     // Check trolley position and handle preview/transition logic
     const trolleyPosition = this.trolleyController.position;
@@ -417,25 +424,27 @@ export class InputManager {
   }
 
   /**
-   * Mount the track selector UI to the DOM
+   * Mount the track selector UI and score display to the DOM
    */
   public mount(): void {
     this.trackSelector.mount();
+    this.scoreDisplay.mount();
     // Default pressed is track 3
     const prev = this.isEnabled;
     this.isEnabled = false; // avoid triggering logic on initial select
     this.trackSelector.selectTrack(3);
     this.currentSelectedTrack = 3;
     this.isEnabled = prev;
-    console.log('[InputManager] Track selector UI mounted');
+    console.log('[InputManager] Track selector UI and score display mounted');
   }
 
   /**
-   * Unmount the track selector UI from the DOM
+   * Unmount the track selector UI and score display from the DOM
    */
   public unmount(): void {
     this.trackSelector.unmount();
-    console.log('[InputManager] Track selector UI unmounted');
+    this.scoreDisplay.unmount();
+    console.log('[InputManager] Track selector UI and score display unmounted');
   }
 
   /**
@@ -495,11 +504,26 @@ export class InputManager {
   }
 
   /**
+   * Get score display for external access
+   */
+  public getScoreDisplay(): ScoreDisplay {
+    return this.scoreDisplay;
+  }
+
+  /**
+   * Update game state (for external systems to update score)
+   */
+  public updateGameState(gameState: GameState): void {
+    this.gameState = gameState;
+  }
+
+  /**
    * Dispose of all resources
    */
   public dispose(): void {
     window.removeEventListener('keydown', this.onKeyDown);
     this.trackSelector.dispose();
+    this.scoreDisplay.dispose();
 
     // Dispose of enhanced path preview system
     this.pathPreviewSystem.dispose();

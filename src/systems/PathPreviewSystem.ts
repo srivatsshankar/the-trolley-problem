@@ -207,7 +207,7 @@ export class PathPreviewSystem {
   /**
    * Create curved path geometry that matches the exact shape the trolley will follow
    */
-  private createCurvedPath(trackNumber: number, segmentIndex: number): THREE.Curve<THREE.Vector3> | null {
+  private createCurvedPath(trackNumber: number, _segmentIndex: number): THREE.Curve<THREE.Vector3> | null {
     // Validate track number
     if (trackNumber < 1 || trackNumber > this.gameConfig.tracks.count) {
       console.warn(`[PathPreviewSystem] Invalid track number: ${trackNumber}`);
@@ -484,7 +484,7 @@ export class PathPreviewSystem {
    * Used by InputManager to show yellow/orange preview colors
    */
   public updatePreviewColor(trackNumber: number, color: number, opacity: number): void {
-    this.activePaths.forEach((path, pathKey) => {
+    this.activePaths.forEach((path) => {
       if (path.trackNumber === trackNumber && path.isTranslucent) {
         // Update the curved track colors
         path.curvedTrack.group.traverse((child) => {

@@ -8,4 +8,4 @@ export { type CollisionResult } from './CollisionDetection';
 export { MenuSystem, MenuType, type MenuOption, type MenuSystemConfig } from './MenuSystem';
 export { UIManager, type UIElement, type UIManagerConfig } from './UIManager';
 export { GroundSystem, type GroundSystemConfig } from './GroundSystem';
-export { SegmentTransitionSystem, createSegmentTransitionSystem } from './SegmentTransitionSystem';
+export { SectionTransitionSystem, createSectionTransitionSystem } from './SegmentTransitionSystem';

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blocky People Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Blocky People Test</h3>
+        <p>Testing new blocky, cartoonish people with:</p>
+        <ul>
+            <li>Single cube body with random colors</li>
+            <li>Cube head with skin color</li>
+            <li>Random hats (30% chance)</li>
+            <li>Bouncing animation</li>
+            <li>Spinning when hit</li>
+        </ul>
+    </div>
+    
+    <div id="controls">
+        <button onclick="createRandomPerson()">Add Random Person</button>
+        <button onclick="hitRandomPerson()">Hit Random Person</button>
+        <button onclick="clearAllPeople()">Clear All</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { createPersonWithVariation } from './src/models/Person.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 5, 5);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 5);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // Ground plane
+        const groundGeometry = new THREE.PlaneGeometry(20, 20);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Track people
+        const people = [];
+
+        // Create initial people
+        for (let i = 0; i < 5; i++) {
+            const position = new THREE.Vector3(
+                (Math.random() - 0.5) * 8,
+                0.8,
+                (Math.random() - 0.5) * 8
+            );
+            const person = createPersonWithVariation(position);
+            scene.add(person.getGroup());
+            people.push(person);
+        }
+
+        // Global functions for buttons
+        window.createRandomPerson = function() {
+            const position = new THREE.Vector3(
+                (Math.random() - 0.5) * 8,
+                0.8,
+                (Math.random() - 0.5) * 8
+            );
+            const person = createPersonWithVariation(position);
+            scene.add(person.getGroup());
+            people.push(person);
+        };
+
+        window.hitRandomPerson = function() {
+            if (people.length > 0) {
+                const randomIndex = Math.floor(Math.random() * people.length);
+                const person = people[randomIndex];
+                if (!person.isHit) {
+                    person.markAsHit();
+                }
+            }
+        };
+
+        window.clearAllPeople = function() {
+            people.forEach(person => {
+                scene.remove(person.getGroup());
+                person.dispose();
+            });
+            people.length = 0;
+        };
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update people animations
+            people.forEach(person => {
+                person.update(0.016); // ~60fps
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>

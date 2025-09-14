@@ -159,7 +159,8 @@ export class Obstacle {
   }
 
   /**
-   * Add details to trolley barrier (wheels, bumpers, etc.)
+   * Add details to trolley barrier (wheels, windows, etc.)
+   * Enhanced version for barrier trolleys - no smoke, no flickering lights, great windows
    */
   private addTrolleyBarrierDetails(): void {
     // Add wheels to the trolley barrier
@@ -190,7 +191,16 @@ export class Obstacle {
     backRightWheel.rotation.z = Math.PI / 2;
     this.group.add(backRightWheel);
 
-    // Add warning stripes
+    // Add great windows (clear, non-flickering)
+    this.addTrolleyWindows();
+
+    // Add chimney (no smoke for barrier trolleys)
+    this.addTrolleyChimney();
+
+    // Add steady headlight (no flickering for barrier trolleys)
+    this.addTrolleyHeadlight();
+
+    // Add warning stripes if secondary color is provided
     if (this.config.colors.secondary) {
       const stripeGeometry = new THREE.BoxGeometry(
         this.config.size.width + 0.02,
@@ -209,6 +219,77 @@ export class Obstacle {
       stripe2.position.y = -this.config.size.height / 4;
       this.group.add(stripe2);
     }
+  }
+
+  /**
+   * Add clear, great-looking windows to trolley barrier
+   */
+  private addTrolleyWindows(): void {
+    const windowGeometry = new THREE.BoxGeometry(
+      this.config.size.width * 0.8,
+      this.config.size.height * 0.4,
+      0.02
+    );
+    
+    const windowMaterial = new THREE.MeshLambertMaterial({
+      color: 0x87CEEB, // Sky blue - clear windows
+      transparent: true,
+      opacity: 0.8
+    });
+
+    // Front window
+    const frontWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+    frontWindow.position.set(0, this.config.size.height * 0.1, this.config.size.length / 2 + 0.01);
+    this.group.add(frontWindow);
+
+    // Back window
+    const backWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+    backWindow.position.set(0, this.config.size.height * 0.1, -this.config.size.length / 2 - 0.01);
+    this.group.add(backWindow);
+
+    // Side windows
+    const sideWindowGeometry = new THREE.BoxGeometry(
+      0.02,
+      this.config.size.height * 0.3,
+      this.config.size.length * 0.6
+    );
+
+    const leftWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+    leftWindow.position.set(-this.config.size.width / 2 - 0.01, this.config.size.height * 0.1, 0);
+    this.group.add(leftWindow);
+
+    const rightWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+    rightWindow.position.set(this.config.size.width / 2 + 0.01, this.config.size.height * 0.1, 0);
+    this.group.add(rightWindow);
+  }
+
+  /**
+   * Add chimney to trolley barrier (no smoke)
+   */
+  private addTrolleyChimney(): void {
+    const chimneyGeometry = new THREE.CylinderGeometry(0.08, 0.1, 0.3, 8);
+    const chimneyMaterial = new THREE.MeshLambertMaterial({
+      color: 0x333333 // Dark gray
+    });
+
+    const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
+    chimney.position.set(0, this.config.size.height / 2 + 0.15, this.config.size.length * 0.2);
+    this.group.add(chimney);
+  }
+
+  /**
+   * Add steady headlight to trolley barrier (no flickering)
+   */
+  private addTrolleyHeadlight(): void {
+    const lightGeometry = new THREE.SphereGeometry(0.06, 8, 6);
+    const lightMaterial = new THREE.MeshLambertMaterial({
+      color: 0xFFFFAA, // Steady warm white light
+      emissive: 0x444422 // Slight glow
+    });
+
+    const headlight = new THREE.Mesh(lightGeometry, lightMaterial);
+    headlight.position.set(0, this.config.size.height * 0.1, this.config.size.length / 2 + 0.05);
+    this.group.add(headlight);
   }
 
   /**

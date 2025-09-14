@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trolley Problem - Menu Test</title>
+    <title>Score Display Test</title>
     <style>
         body {
             margin: 0;
@@ -47,6 +47,27 @@
             <!-- UI elements will be added here by the game -->
         </div>
     </div>
-    <script type="module" src="/dist/assets/index-5d0dd449.js"></script>
+    
+    <script type="module">
+        import { ScoreDisplay, DEFAULT_SCORE_DISPLAY_CONFIG } from './src/components/ScoreDisplay.ts';
+        
+        console.log('Testing ScoreDisplay component...');
+        
+        // Create score display
+        const scoreDisplay = new ScoreDisplay(DEFAULT_SCORE_DISPLAY_CONFIG);
+        
+        // Mount it to the UI overlay
+        scoreDisplay.mount();
+        
+        // Test score updates
+        let score = 0;
+        setInterval(() => {
+            score += Math.floor(Math.random() * 10) - 3; // Random score changes
+            scoreDisplay.updateScore(score);
+            console.log('Updated score to:', score);
+        }, 1000);
+        
+        console.log('ScoreDisplay test initialized');
+    </script>
 </body>
 </html>

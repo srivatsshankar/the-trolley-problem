@@ -6,7 +6,6 @@
 import * as THREE from 'three';
 import { Person, createPersonWithVariation } from '../models/Person';
 import { GameConfigManager } from '../models/GameConfig';
-import { TrackSegment } from './TrackGenerator';
 
 export interface PeopleGenerationResult {
   people: Person[];
@@ -26,14 +25,18 @@ export class PeopleManager {
   }
 
   /**
-   * Generate people for a track segment
-   * Requirements: 6.3, 6.4 - 1-5 people per track, one track with exactly 1
+   * Generate people for a multi-track section.
+   * New requirements:
+  * - Every non-occupied track must have between 1 and 5 people.
+  * - Ensure at least one track has only 1-2 people in the section.
+  * - Ensure at least one (different) track has 4-5 people in the section (when possible).
+  * - Tracks occupied by barriers must have 0 people.
+  * - People must be positioned within 15% to 65% of the section length.
    */
-  public generatePeopleForSegment(segment: TrackSegment, segmentIndex: number, occupiedTracks: number[] = []): PeopleGenerationResult {
-    // const _config = this.configManager.getConfig();
-    const trackCount = segment.tracks?.length || 0;
+  public generatePeopleForSection(sectionIndex: number, tracks: THREE.Object3D[], occupiedTracks: number[] = [], zMin?: number, zMax?: number): PeopleGenerationResult {
+    const trackCount = tracks.length;
     
-    // Only generate people for multi-track segments (5 tracks)
+    // Only generate people for multi-track sections (5 tracks)
     if (trackCount !== 5) {
       return {
         people: [],
@@ -43,11 +46,14 @@ export class PeopleManager {
       };
     }
     
-    const distribution = this.configManager.getPeopleDistribution();
+  const distribution = this.configManager.getPeopleDistribution();
+  const portionLength = this.configManager.getConfig().tracks.segmentLength;
+  const sectionLength = portionLength * 2.5;
+  const sectionStartZ = sectionIndex * sectionLength;
     const availableTracks = this.getAvailableTracks(trackCount, occupiedTracks);
     
     if (availableTracks.length === 0) {
-      this.log(`No available tracks for people in segment ${segmentIndex}`);
+      this.log(`No available tracks for people in section ${sectionIndex} - all tracks occupied by barriers`);
       return {
         people: [],
         peoplePerTrack: new Array(trackCount).fill(0),
@@ -56,18 +62,17 @@ export class PeopleManager {
       };
     }
     
-    // Generate people distribution
+    // Generate people distribution per non-occupied track
     const peopleDistribution = this.generatePeopleDistribution(
       availableTracks,
       distribution.minPeoplePerTrack,
-      distribution.maxPeoplePerTrack,
-      distribution.guaranteedSinglePersonTrack
+      distribution.maxPeoplePerTrack
     );
     
     const people: Person[] = [];
     const peoplePerTrack = new Array(trackCount).fill(0);
     let totalPeople = 0;
-    let guaranteedSinglePersonTrack = -1;
+  let guaranteedSinglePersonTrack = -1;
     
     // Place people on tracks
     for (let trackIndex = 0; trackIndex < trackCount; trackIndex++) {
@@ -76,18 +81,27 @@ export class PeopleManager {
       }
       
       const peopleCount = peopleDistribution[trackIndex];
-      if (peopleCount === 0) continue;
+  if (peopleCount === 0) continue;
       
-      const track = segment.tracks[trackIndex];
+      const track = tracks[trackIndex];
       if (!track) continue;
       
       // Generate people for this track
+      // Determine placement bounds: prefer provided zMin/zMax; otherwise clamp to [15%, 65%] of the section
+      let minZ = zMin ?? sectionStartZ + sectionLength * 0.15;
+      let maxZ = zMax ?? sectionStartZ + sectionLength * 0.65;
+      // Ensure bounds are valid
+      if (maxZ < minZ) {
+        const tmp = minZ; minZ = maxZ; maxZ = tmp;
+      }
+
       const trackPeople = this.generatePeopleForTrack(
         track.position,
-        segment,
-        segmentIndex,
+        sectionIndex,
         trackIndex,
-        peopleCount
+        peopleCount,
+        minZ,
+        maxZ
       );
       
       people.push(...trackPeople);
@@ -95,12 +109,12 @@ export class PeopleManager {
       totalPeople += peopleCount;
       
       // Track the guaranteed single person track
-      if (peopleCount === 1 && guaranteedSinglePersonTrack === -1) {
+      if (peopleCount >= 1 && peopleCount <= 2 && guaranteedSinglePersonTrack === -1) {
         guaranteedSinglePersonTrack = trackIndex;
       }
     }
     
-    this.log(`Generated ${totalPeople} people for segment ${segmentIndex}, distribution: [${peoplePerTrack.join(', ')}]`);
+    this.log(`Generated ${totalPeople} people for section ${sectionIndex}, distribution: [${peoplePerTrack.join(', ')}], available tracks: [${availableTracks.join(', ')}], occupied tracks: [${occupiedTracks.join(', ')}]`);
     
     return {
       people,
@@ -119,14 +133,16 @@ export class PeopleManager {
   }
 
   /**
-   * Generate people distribution across available tracks
-   * Requirement 6.4: One track with exactly 1 person
+   * Generate people distribution across available tracks for a single segment
+   * Requirements:
+   * - Every available (non-occupied) track has 1-5 people
+   * - Ensure at least one track has only 1-2 people
+   * - Ensure at least one (different) track has 4-5 people, when two or more tracks are available
    */
   private generatePeopleDistribution(
     availableTracks: number[],
     minPeople: number,
-    maxPeople: number,
-    guaranteedSingle: boolean
+    maxPeople: number
   ): number[] {
     const distribution = new Array(5).fill(0);
     
@@ -134,27 +150,28 @@ export class PeopleManager {
       return distribution;
     }
     
-    // First, ensure one track has exactly 1 person if required
-    if (guaranteedSingle && availableTracks.length > 0) {
-      const singlePersonTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
-      distribution[singlePersonTrack] = 1;
-      
-      // Remove this track from available tracks for further distribution
-      const remainingTracks = availableTracks.filter(track => track !== singlePersonTrack);
-      
-      // Distribute people on remaining tracks
-      for (const trackIndex of remainingTracks) {
-        const peopleCount = Math.floor(Math.random() * (maxPeople - minPeople + 1)) + minPeople;
-        distribution[trackIndex] = peopleCount;
-      }
-    } else {
-      // Distribute people randomly on all available tracks
-      for (const trackIndex of availableTracks) {
-        const peopleCount = Math.floor(Math.random() * (maxPeople - minPeople + 1)) + minPeople;
-        distribution[trackIndex] = peopleCount;
-      }
+    // Select one guaranteed track to have 1-2 people
+    const guaranteedLowTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+    const guaranteedLowCount = Math.floor(Math.random() * 2) + 1; // 1 or 2
+    distribution[guaranteedLowTrack] = guaranteedLowCount;
+
+    // If possible, select a different guaranteed track to have 4-5 people
+    let guaranteedHighTrack: number | null = null;
+    if (availableTracks.length >= 2) {
+      const otherTracks = availableTracks.filter(t => t !== guaranteedLowTrack);
+      guaranteedHighTrack = otherTracks[Math.floor(Math.random() * otherTracks.length)];
+      const guaranteedHighCount = 4 + Math.floor(Math.random() * 2); // 4 or 5
+      distribution[guaranteedHighTrack] = guaranteedHighCount;
     }
-    
+
+    // All other available tracks get between min and max people (inclusive)
+    for (const trackIndex of availableTracks) {
+      if (trackIndex === guaranteedLowTrack || trackIndex === guaranteedHighTrack) continue;
+      const count = Math.floor(Math.random() * (maxPeople - minPeople + 1)) + minPeople; // [min, max]
+      distribution[trackIndex] = count;
+    }
+
+    this.log(`People distribution per section: low track ${guaranteedLowTrack} (${guaranteedLowCount})` + (guaranteedHighTrack !== null ? `, high track ${guaranteedHighTrack} (${distribution[guaranteedHighTrack]})` : '') + `, others in [${minPeople}, ${maxPeople}]`);
     return distribution;
   }
 
@@ -163,26 +180,26 @@ export class PeopleManager {
    */
   private generatePeopleForTrack(
     trackPosition: THREE.Vector3,
-    segment: TrackSegment,
-    segmentIndex: number,
+  _sectionIndex: number,
     trackIndex: number,
-    peopleCount: number
+    peopleCount: number,
+    zMin: number,
+    zMax: number
   ): Person[] {
     const people: Person[] = [];
     const config = this.configManager.getConfig();
-    const segmentLength = config.tracks.segmentLength;
-    const trackWidth = config.tracks.width;
+  const trackWidth = config.tracks.width;
     
     // Calculate positions for people along the track
     const positions = this.calculatePeoplePositions(
       trackPosition,
-      segment.startZ,
-      segmentLength,
+      zMin,
+      zMax,
       trackWidth,
       peopleCount
     );
     
-    // Create people at calculated positions
+      // Create people at calculated positions
     for (let i = 0; i < peopleCount; i++) {
       const position = positions[i];
       const person = createPersonWithVariation(position);
@@ -191,7 +208,10 @@ export class PeopleManager {
       this.scene.add(person.getGroup());
       
       // Store person with unique key
-      const personKey = `${segmentIndex}_${trackIndex}_${i}`;
+        // Key by the actual railway portion (segment) index based on Z position
+        const portionLength = this.configManager.getConfig().tracks.segmentLength;
+        const segmentKeyIndex = Math.floor(position.z / portionLength);
+        const personKey = `${segmentKeyIndex}_${trackIndex}_${i}`;
       this.people.set(personKey, person);
       
       people.push(person);
@@ -201,40 +221,36 @@ export class PeopleManager {
   }
 
   /**
-   * Calculate positions for people along a track
+   * Calculate positions for people within the current segment's bounds
    */
   private calculatePeoplePositions(
     trackPosition: THREE.Vector3,
-    segmentStartZ: number,
-    segmentLength: number,
-    trackWidth: number,
+    zMin: number,
+    zMax: number,
+    _trackWidth: number,
     peopleCount: number
   ): THREE.Vector3[] {
     const positions: THREE.Vector3[] = [];
-    
+    const segStart = zMin;
+    const segEnd = zMax;
+
+    // Guard against invalid ranges
+    if (segEnd <= segStart) {
+      return positions;
+    }
+
     if (peopleCount === 1) {
-      // Single person: place in middle of segment
-      const position = new THREE.Vector3(
-        trackPosition.x + (Math.random() - 0.5) * trackWidth * 0.8, // Slight random offset
-        trackPosition.y + 0.8, // Above track surface
-        segmentStartZ + segmentLength * 0.5
-      );
-      positions.push(position);
+      // Single person: place randomly within this segment
+      const randomZ = segStart + Math.random() * (segEnd - segStart);
+      positions.push(new THREE.Vector3(trackPosition.x, trackPosition.y + 0.8, randomZ));
     } else {
-      // Multiple people: distribute along the track
-      const spacing = segmentLength * 0.6 / (peopleCount - 1); // Use 60% of segment length
-      const startZ = segmentStartZ + segmentLength * 0.2; // Start 20% into segment
-      
+      // Multiple people: distribute evenly within this segment
+      const spacing = (segEnd - segStart) / (peopleCount + 1);
       for (let i = 0; i < peopleCount; i++) {
-        const position = new THREE.Vector3(
-          trackPosition.x + (Math.random() - 0.5) * trackWidth * 0.8, // Random X offset
-          trackPosition.y + 0.8, // Above track surface
-          startZ + (i * spacing) + (Math.random() - 0.5) * spacing * 0.3 // Slight Z variation
-        );
-        positions.push(position);
+        positions.push(new THREE.Vector3(trackPosition.x, trackPosition.y + 0.8, segStart + spacing * (i + 1)));
       }
     }
-    
+
     return positions;
   }
 
@@ -352,14 +368,17 @@ export class PeopleManager {
   }
 
   /**
-   * Remove people for a specific segment (for cleanup)
+   * Remove people for a specific section (for cleanup)
    */
-  public removePeopleForSegment(segmentIndex: number): void {
+  public removePeopleForSection(sectionIndex: number): void {
     const keysToRemove: string[] = [];
     
     this.people.forEach((person, key) => {
-      const [segIdx] = key.split('_').map(Number);
-      if (segIdx === segmentIndex) {
+      const [storedSegmentIdx] = key.split('_').map(Number);
+      const portionLength = this.configManager.getConfig().tracks.segmentLength;
+      const sectionLength = portionLength * 2.5;
+      const sectionOfStored = Math.floor((storedSegmentIdx * portionLength) / sectionLength);
+      if (sectionOfStored === sectionIndex) {
         // Remove from scene
         this.scene.remove(person.getGroup());
         
@@ -374,7 +393,7 @@ export class PeopleManager {
     keysToRemove.forEach(key => this.people.delete(key));
     
     if (keysToRemove.length > 0) {
-      this.log(`Removed ${keysToRemove.length} people from segment ${segmentIndex}`);
+      this.log(`Removed ${keysToRemove.length} people from section ${sectionIndex}`);
     }
   }
 

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scoring System Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .score-demo {
+            position: relative;
+            background: #333;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        .section-info {
+            background: #444;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .log {
+            background: #111;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Scoring System Test</h1>
+        <p>This test demonstrates the new scoring system where:</p>
+        <ul>
+            <li>Score changes only appear at the end of each section</li>
+            <li>Both hit (-X) and avoided (+Y) are shown simultaneously</li>
+            <li>Score changes appear at the bottom right of the score display</li>
+            <li>Only people hit/avoided affect the score (not barriers)</li>
+        </ul>
+        
+        <div class="score-demo">
+            <div id="score-display-container"></div>
+            
+            <div class="section-info">
+                <h3>Current Section: <span id="current-section">1</span></h3>
+                <p>People in section: <span id="people-count">5</span></p>
+                <p>People hit so far: <span id="hit-count">0</span></p>
+            </div>
+            
+            <div>
+                <button onclick="hitPerson()">Hit Person</button>
+                <button onclick="completeSection()">Complete Section</button>
+                <button onclick="resetDemo()">Reset Demo</button>
+            </div>
+        </div>
+        
+        <div class="log" id="log"></div>
+    </div>
+
+    <script type="module">
+        import { ScoreDisplay, DEFAULT_SCORE_DISPLAY_CONFIG } from './src/components/ScoreDisplay.js';
+
+        // Create UI overlay for score display
+        const uiOverlay = document.createElement('div');
+        uiOverlay.id = 'ui-overlay';
+        uiOverlay.style.cssText = `
+            position: relative;
+            width: 300px;
+            height: 100px;
+            background: rgba(0,0,0,0.3);
+            border: 2px solid #666;
+            border-radius: 10px;
+        `;
+        document.getElementById('score-display-container').appendChild(uiOverlay);
+
+        // Create score display
+        const scoreDisplay = new ScoreDisplay({
+            ...DEFAULT_SCORE_DISPLAY_CONFIG,
+            topMargin: 10,
+            leftMargin: 10
+        });
+        scoreDisplay.mount();
+
+        // Demo state
+        let currentScore = 0;
+        let currentSection = 1;
+        let peopleInSection = 5;
+        let peopleHitInSection = 0;
+
+        // Update display
+        function updateDisplay() {
+            scoreDisplay.updateScore(currentScore);
+            document.getElementById('current-section').textContent = currentSection;
+            document.getElementById('people-count').textContent = peopleInSection;
+            document.getElementById('hit-count').textContent = peopleHitInSection;
+        }
+
+        // Log function
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}<br>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // Hit a person
+        window.hitPerson = function() {
+            if (peopleHitInSection < peopleInSection) {
+                peopleHitInSection++;
+                log(`Person hit! (${peopleHitInSection}/${peopleInSection} in section ${currentSection})`);
+                updateDisplay();
+            } else {
+                log('All people in this section already hit!');
+            }
+        };
+
+        // Complete section
+        window.completeSection = function() {
+            const peopleAvoided = peopleInSection - peopleHitInSection;
+            const scoreChange = peopleAvoided - peopleHitInSection;
+            
+            // Update score
+            currentScore += scoreChange;
+            
+            // Show section completion with both values
+            scoreDisplay.showSectionCompletion(peopleHitInSection, peopleAvoided);
+            
+            log(`Section ${currentSection} completed:`);
+            log(`  - People hit: ${peopleHitInSection} (-${peopleHitInSection} points)`);
+            log(`  - People avoided: ${peopleAvoided} (+${peopleAvoided} points)`);
+            log(`  - Net score change: ${scoreChange > 0 ? '+' : ''}${scoreChange}`);
+            log(`  - New total score: ${currentScore}`);
+            
+            // Move to next section
+            currentSection++;
+            peopleInSection = Math.floor(Math.random() * 8) + 3; // 3-10 people
+            peopleHitInSection = 0;
+            
+            updateDisplay();
+        };
+
+        // Reset demo
+        window.resetDemo = function() {
+            currentScore = 0;
+            currentSection = 1;
+            peopleInSection = 5;
+            peopleHitInSection = 0;
+            
+            document.getElementById('log').innerHTML = '';
+            log('Demo reset');
+            updateDisplay();
+        };
+
+        // Initialize
+        updateDisplay();
+        log('Scoring system test initialized');
+        log('Click "Hit Person" to mark people as hit, then "Complete Section" to see score changes');
+    </script>
+</body>
+</html>

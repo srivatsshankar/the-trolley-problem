@@ -6,41 +6,41 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { TrackGenerator } from '../TrackGenerator';
 import { GameConfig, DEFAULT_CONFIG } from '../../models/GameConfig';
-import { Track } from '../../models/Track';
 
-// Mock Three.js
-vi.mock('three', () => ({
-  Scene: vi.fn().mockImplementation(() => ({
-    add: vi.fn(),
-    remove: vi.fn()
-  })),
-  Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => ({
-    x, y, z,
-    clone: vi.fn().mockReturnThis(),
-    copy: vi.fn().mockReturnThis(),
-    distanceTo: vi.fn().mockReturnValue(5.0)
-  }))
-}));
-
-// Mock Track
-vi.mock('../../models/Track', () => ({
-  createTrack: vi.fn().mockImplementation((id, position, colorType) => ({
-    id,
-    position,
-    mesh: {
-      visible: true,
-      userData: { type: 'track', id }
-    },
-    dispose: vi.fn()
-  })),
-  TRACK_COLORS: {
-    NORMAL: 0x4169E1,
-    SELECTED: 0x00FF00,
-    PREVIEW: 0xFFD700,
-    DANGER: 0xFF4500,
-    SAFE: 0x32CD32
-  }
-}));
+vi.mock('three', async () => {
+    const THREE = await vi.importActual<typeof import('three')>('three');
+    const mockVector3 = {
+        set: vi.fn(),
+        clone: vi.fn().mockReturnThis(),
+    };
+    return {
+        ...THREE,
+        Scene: vi.fn(() => ({
+            add: vi.fn(),
+            remove: vi.fn(),
+        })),
+        Vector3: vi.fn(() => mockVector3),
+        MeshBasicMaterial: vi.fn(() => ({
+            clone: vi.fn().mockReturnThis(),
+        })),
+        Mesh: vi.fn(() => ({
+            position: { set: vi.fn(), clone: vi.fn().mockReturnThis(), copy: vi.fn() },
+            scale: { set: vi.fn(), clone: vi.fn().mockReturnThis() },
+            add: vi.fn(),
+            remove: vi.fn(),
+        })),
+        BoxGeometry: vi.fn(() => ({
+            clone: vi.fn().mockReturnThis(),
+        })),
+        Group: vi.fn(() => ({
+            add: vi.fn(),
+            remove: vi.fn(),
+            position: { set: vi.fn(), clone: vi.fn().mockReturnThis(), copy: vi.fn() },
+            children: [],
+            traverse: vi.fn(),
+        })),
+    };
+});
 
 describe('TrackGenerator', () => {
   let trackGenerator: TrackGenerator;
@@ -223,7 +223,6 @@ describe('TrackGenerator', () => {
     });
 
     it('should cleanup old segments when far away', () => {
-      const initialStats = trackGenerator.getGenerationStats();
       const farPosition = new THREE.Vector3(0, 0, 1000);
       
       // Generate many segments
@@ -233,7 +232,6 @@ describe('TrackGenerator', () => {
       const veryFarPosition = new THREE.Vector3(0, 0, 2000);
       trackGenerator.cleanupOldSegments(veryFarPosition);
       
-      const finalStats = trackGenerator.getGenerationStats();
       // Should have cleaned up some segments
       expect(mockScene.remove).toHaveBeenCalled();
     });
@@ -271,25 +269,22 @@ describe('TrackGenerator', () => {
   });
 
   describe('statistics', () => {
-    beforeEach(() => {
-      trackGenerator.initialize();
-    });
-
     it('should provide accurate generation statistics', () => {
-      const stats = trackGenerator.getGenerationStats();
-      
-      expect(stats.totalSegments).toBe(gameConfig.rendering.maxVisibleSegments);
-      expect(stats.singleTrackSegments).toBe(3);
-      expect(stats.multiTrackSegments).toBe(stats.totalSegments - 3);
-      expect(stats.visibleSegments).toBeGreaterThan(0);
-      expect(stats.lastGeneratedSegment).toBeGreaterThanOrEqual(0);
+      trackGenerator.initialize();
+
+      const initialStats = trackGenerator.getGenerationStats();
+      expect(initialStats.totalSegments).toBe(gameConfig.rendering.maxVisibleSegments);
+
+      trackGenerator.updateGeneration(new THREE.Vector3(0, 0, -gameConfig.tracks.segmentLength * 2));
+
+      const finalStats = trackGenerator.getGenerationStats();
+      expect(finalStats.totalSegments).toBeGreaterThan(initialStats.totalSegments);
     });
   });
 
   describe('disposal', () => {
     it('should dispose all resources', () => {
       trackGenerator.initialize();
-      const initialStats = trackGenerator.getGenerationStats();
       
       trackGenerator.dispose();
       

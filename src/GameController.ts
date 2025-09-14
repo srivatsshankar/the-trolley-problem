@@ -187,6 +187,7 @@ export class GameController {
 
       // Update track generation based on trolley position
       this.trackGenerator.updateGeneration(trolleyPosition);
+      this.trackGenerator.update(deltaTime);
 
   // No forced reset: tracks are generated endlessly; camera continues following
     }
