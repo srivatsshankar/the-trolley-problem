@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Segment Markers Test - Trolley Problem Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        <div><strong>Section Markers Test</strong></div>
+        <div>🔴 Red lines mark SECTION boundaries (every 2.5 railway portions)</div>
+        <div>Railway portion: 25 units | Game section: 62.5 units (2.5x)</div>
+        <div>Press SPACE to start/stop trolley</div>
+        <div>Use WASD to move camera</div>
+        <div id="position">Trolley Position: 0</div>
+        <div id="portion">Current Railway Portion: 0</div>
+        <div id="section">Current Game Section: 0</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TrackGenerator } from './src/systems/TrackGenerator.js';
+        import { DEFAULT_CONFIG } from './src/models/GameConfig.js';
+
+        console.log('Segment Markers Test - Starting...');
+
+        // Get canvas element
+        const canvas = document.getElementById('gameCanvas');
+        const positionDiv = document.getElementById('position');
+        const portionDiv = document.getElementById('portion');
+        const sectionDiv = document.getElementById('section');
+
+        // Three.js setup
+        let scene, camera, renderer, trolley, trackGenerator;
+        let trolleySpeed = 3;
+        let frameCount = 0;
+        let isMoving = false;
+        let cameraPosition = new THREE.Vector3(0, 15, -10);
+
+        function initializeThreeJS() {
+            console.log('Initializing Three.js...');
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create perspective camera for better depth perception
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.copy(cameraPosition);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            console.log('Three.js initialized successfully!');
+        }
+
+        function initializeGame() {
+            console.log('Initializing segment markers test...');
+
+            // Create ground - larger to cover all track areas
+            const groundGeometry = new THREE.PlaneGeometry(300, 100);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Initialize track generator
+            trackGenerator = new TrackGenerator(scene, DEFAULT_CONFIG);
+            trackGenerator.initialize();
+
+            // Log initial track generation stats
+            const stats = trackGenerator.getGenerationStats();
+            console.log('Initial track generation:', stats);
+            console.log('Railway portion length:', DEFAULT_CONFIG.tracks.segmentLength);
+            console.log('Game section length:', trackGenerator.getSectionLength());
+
+            // Create simple trolley
+            const trolleyGeometry = new THREE.BoxGeometry(1.4, 1.0, 2.4);
+            const trolleyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B35 });
+            trolley = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+            trolley.position.set(0, 0.75, -50); // Start further back to see more segments
+            trolley.castShadow = true;
+            scene.add(trolley);
+
+            console.log('Trolley starting position:', trolley.position);
+            console.log('Segment markers test initialized successfully!');
+        }
+
+        function updateUI() {
+            if (trolley && trackGenerator) {
+                const z = trolley.position.z;
+                const portionIndex = trackGenerator.getCurrentSegmentIndex(trolley.position);
+                const sectionIndex = trackGenerator.getCurrentSectionIndex(trolley.position);
+                const portionProgress = (trackGenerator.getSegmentProgress(trolley.position) * 100).toFixed(1);
+                const sectionProgress = (trackGenerator.getSectionProgress(trolley.position) * 100).toFixed(1);
+                
+                positionDiv.textContent = `Trolley Position: ${z.toFixed(1)}`;
+                portionDiv.textContent = `Railway Portion: ${portionIndex} (${portionProgress}% through)`;
+                sectionDiv.textContent = `Game Section: ${sectionIndex} (${sectionProgress}% through)`;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            frameCount++;
+
+            // Move trolley if enabled
+            if (isMoving && trolley) {
+                trolley.position.z += trolleySpeed * 0.016;
+
+                // Update track generation
+                if (trackGenerator) {
+                    trackGenerator.updateGeneration(trolley.position);
+                }
+
+                // Update camera to follow trolley
+                const targetCameraZ = trolley.position.z - 10;
+                camera.position.z += (targetCameraZ - camera.position.z) * 0.05;
+                camera.lookAt(trolley.position.x, 0, trolley.position.z + 10);
+
+                // Reset when too far
+                if (trolley.position.z > 200) {
+                    trolley.position.z = -50;
+                }
+            }
+
+            // Update UI every 10 frames
+            if (frameCount % 10 === 0) {
+                updateUI();
+            }
+
+            // Log status every 120 frames
+            if (frameCount % 120 === 0) {
+                const trolleyZ = trolley ? trolley.position.z.toFixed(1) : 'N/A';
+                const stats = trackGenerator ? trackGenerator.getGenerationStats() : null;
+                console.log(`Trolley Z: ${trolleyZ}, Moving: ${isMoving}`, stats);
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Handle keyboard input
+        const keys = {};
+        window.addEventListener('keydown', (event) => {
+            keys[event.code] = true;
+            
+            if (event.code === 'Space') {
+                event.preventDefault();
+                isMoving = !isMoving;
+                console.log('Trolley movement:', isMoving ? 'STARTED' : 'STOPPED');
+            }
+        });
+
+        window.addEventListener('keyup', (event) => {
+            keys[event.code] = false;
+        });
+
+        // Camera controls
+        function updateCameraControls() {
+            const speed = 0.5;
+            if (keys['KeyW']) camera.position.z += speed;
+            if (keys['KeyS']) camera.position.z -= speed;
+            if (keys['KeyA']) camera.position.x -= speed;
+            if (keys['KeyD']) camera.position.x += speed;
+            if (keys['KeyQ']) camera.position.y += speed;
+            if (keys['KeyE']) camera.position.y -= speed;
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // Animation loop with camera controls
+        function animateWithControls() {
+            requestAnimationFrame(animateWithControls);
+            updateCameraControls();
+            animate();
+        }
+
+        // Initialize and start
+        initializeThreeJS();
+        initializeGame();
+        animateWithControls();
+    </script>
+</body>
+
+</html>

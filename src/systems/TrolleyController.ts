@@ -238,6 +238,8 @@ export class TrolleyController {
         0.05 // Slight elevation for smooth transition
       );
       
+      console.log(`[TrolleyController] Created actual transition curve: Track ${this._currentTrack}->${trackNumber}, X=${startX.toFixed(1)}->${endX.toFixed(1)}, Z=${startZ.toFixed(1)}->${endZ.toFixed(1)} (speed=${Math.max(this._speed, this._baseSpeed).toFixed(1)}, duration=${this._transitionDuration})`);
+      
       // Notify listeners to render a temporary connector
       this.onTransitionStartCb?.(this.transitionCurve);
     } catch (e) {

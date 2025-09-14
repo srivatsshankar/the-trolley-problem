@@ -105,7 +105,7 @@ export class GameWithInputSystem {
   private logGameState(): void {
     const trolleyState = this.trolleyController.getState();
     const selectedTrack = this.inputManager.getSelectedTrack();
-    const queue = this.inputManager.getSelectionQueue();
+    const currentPreview = this.inputManager.getCurrentPreview();
     
     console.log('Game State:', {
       trolleyPosition: {
@@ -115,7 +115,7 @@ export class GameWithInputSystem {
       currentTrack: trolleyState.currentTrack,
       targetTrack: trolleyState.targetTrack,
       selectedTrack: selectedTrack,
-      queuedSelections: queue.length,
+      hasPreview: !!currentPreview,
       speed: trolleyState.speed.toFixed(2),
       isTransitioning: trolleyState.isTransitioning
     });

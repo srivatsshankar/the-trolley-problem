@@ -15,6 +15,7 @@ export interface TrackSegment {
   endZ: number;
   isVisible: boolean;
   isGenerated: boolean;
+  segmentMarkers?: THREE.Mesh[]; // Red lines to demarcate segment boundaries
 }
 
 export interface GenerationConfig {
@@ -94,7 +95,8 @@ export class TrackGenerator {
       startZ,
       endZ,
       isVisible: false,
-      isGenerated: false
+      isGenerated: false,
+      segmentMarkers: []
     };
 
     if (isSingleTrack) {
@@ -105,9 +107,16 @@ export class TrackGenerator {
       segment.tracks = this.generateParallelTracks(segmentIndex, position);
     }
 
-    // Add tracks to scene
+    // Generate segment boundary markers (red lines)
+    segment.segmentMarkers = this.generateSegmentMarkers(segmentIndex, isSingleTrack);
+
+    // Add tracks and markers to scene
     segment.tracks.forEach(track => {
       this.scene.add(track.mesh);
+    });
+    
+    segment.segmentMarkers.forEach(marker => {
+      this.scene.add(marker);
     });
 
     segment.isGenerated = true;
@@ -116,7 +125,7 @@ export class TrackGenerator {
     this.segments.set(segmentIndex, segment);
     this.lastGeneratedSegment = Math.max(this.lastGeneratedSegment, segmentIndex);
     
-    this.log(`Generated segment ${segmentIndex} with ${segment.tracks.length} tracks`);
+    this.log(`Generated segment ${segmentIndex} with ${segment.tracks.length} tracks and segment markers`);
     return segment;
   }
 
@@ -169,6 +178,83 @@ export class TrackGenerator {
     }
     
     return tracks;
+  }
+
+  /**
+   * Generate red line markers to demarcate game section boundaries
+   * Game sections are 2.5 times the length of railway segments (portions)
+   * Red lines should only appear at section boundaries, not every railway segment
+   */
+  private generateSegmentMarkers(segmentIndex: number, isSingleTrack: boolean): THREE.Mesh[] {
+    const markers: THREE.Mesh[] = [];
+    const portionLength = this.gameConfig.tracks.segmentLength; // Railway portion length
+    const sectionLength = portionLength * 2.5; // Game section length (2.5x railway portion)
+    
+    // Calculate positions
+    const portionStartZ = segmentIndex * portionLength;
+    const portionEndZ = portionStartZ + portionLength;
+    
+    // Only create markers at section boundaries (every 2.5 portions)
+    // Check if this railway portion contains a section boundary
+    const sectionBoundaries: number[] = [];
+    
+    // Find section boundaries that fall within or at the edges of this railway portion
+    const startSectionIndex = Math.floor(portionStartZ / sectionLength);
+    const endSectionIndex = Math.floor(portionEndZ / sectionLength);
+    
+    // Check for section boundaries within this portion
+    for (let sectionIndex = startSectionIndex; sectionIndex <= endSectionIndex + 1; sectionIndex++) {
+      const sectionBoundaryZ = sectionIndex * sectionLength;
+      
+      // Only add boundary if it's within or at the edges of this railway portion
+      if (sectionBoundaryZ >= portionStartZ && sectionBoundaryZ <= portionEndZ) {
+        sectionBoundaries.push(sectionBoundaryZ);
+      }
+    }
+    
+    // Create markers only if there are section boundaries in this portion
+    if (sectionBoundaries.length === 0) {
+      return markers; // No section boundaries in this railway portion
+    }
+    
+    // Create red line material
+    const redLineMaterial = new THREE.MeshBasicMaterial({
+      color: 0xFF0000,
+      transparent: true,
+      opacity: 0.9
+    });
+    
+    // Determine the width of the markers based on track layout
+    let markerWidth: number;
+    if (isSingleTrack) {
+      markerWidth = this.gameConfig.tracks.width * 3; // Wider for better visibility
+    } else {
+      const trackSpacing = this.generationConfig.trackSpacing;
+      const totalWidth = (this.TRACK_COUNT - 1) * trackSpacing;
+      markerWidth = totalWidth + this.gameConfig.tracks.width * 2; // Span all tracks plus margin
+    }
+    
+    const markerHeight = 0.15; // Slightly taller for better visibility
+    const markerDepth = 0.3; // Thicker for better visibility
+    
+    // Create geometry for the marker lines
+    const markerGeometry = new THREE.BoxGeometry(markerWidth, markerHeight, markerDepth);
+    
+    // Create markers at each section boundary found in this railway portion
+    sectionBoundaries.forEach(boundaryZ => {
+      // Skip the very first boundary at z=0 to avoid duplicate
+      if (boundaryZ === 0 && segmentIndex === 0) {
+        return;
+      }
+      
+      const marker = new THREE.Mesh(markerGeometry.clone(), redLineMaterial.clone());
+      marker.position.set(0, 0.08, boundaryZ); // Slightly above ground
+      markers.push(marker);
+      
+      this.log(`Created section boundary marker at Z=${boundaryZ} (railway portion ${segmentIndex})`);
+    });
+    
+    return markers;
   }
 
   /**
@@ -231,6 +317,13 @@ export class TrackGenerator {
         segment.tracks.forEach(track => {
           track.mesh.visible = shouldBeVisible;
         });
+        
+        // Update segment marker visibility
+        if (segment.segmentMarkers) {
+          segment.segmentMarkers.forEach(marker => {
+            marker.visible = shouldBeVisible;
+          });
+        }
       }
     });
   }
@@ -263,6 +356,15 @@ export class TrackGenerator {
           this.scene.remove(track.mesh);
           track.dispose();
         });
+        
+        // Remove segment markers from scene and dispose
+        if (segment.segmentMarkers) {
+          segment.segmentMarkers.forEach(marker => {
+            this.scene.remove(marker);
+            marker.geometry.dispose();
+            (marker.material as THREE.Material).dispose();
+          });
+        }
         
         this.segments.delete(segmentId);
         this.log(`Cleaned up segment ${segmentId}`);
@@ -368,6 +470,16 @@ export class TrackGenerator {
         this.scene.remove(track.mesh);
         track.dispose();
       });
+      
+      // Remove existing segment markers
+      if (existingSegment.segmentMarkers) {
+        existingSegment.segmentMarkers.forEach(marker => {
+          this.scene.remove(marker);
+          marker.geometry.dispose();
+          (marker.material as THREE.Material).dispose();
+        });
+      }
+      
       this.segments.delete(segmentIndex);
     }
     
@@ -394,6 +506,15 @@ export class TrackGenerator {
         this.scene.remove(track.mesh);
         track.dispose();
       });
+      
+      // Dispose segment markers
+      if (segment.segmentMarkers) {
+        segment.segmentMarkers.forEach(marker => {
+          this.scene.remove(marker);
+          marker.geometry.dispose();
+          (marker.material as THREE.Material).dispose();
+        });
+      }
     });
     
     this.segments.clear();
@@ -431,14 +552,23 @@ export class TrackGenerator {
   }
 
   /**
-   * Get the current segment index based on position
+   * Get the current railway portion index based on position
    */
   public getCurrentSegmentIndex(position: THREE.Vector3): number {
     return Math.floor(position.z / this.gameConfig.tracks.segmentLength);
   }
 
   /**
-   * Get progress within current segment (0.0 to 1.0)
+   * Get the current game section index based on position
+   * Game sections are 2.5 times the length of railway portions
+   */
+  public getCurrentSectionIndex(position: THREE.Vector3): number {
+    const sectionLength = this.gameConfig.tracks.segmentLength * 2.5;
+    return Math.floor(position.z / sectionLength);
+  }
+
+  /**
+   * Get progress within current railway portion (0.0 to 1.0)
    */
   public getSegmentProgress(position: THREE.Vector3): number {
     const segmentLength = this.gameConfig.tracks.segmentLength;
@@ -446,10 +576,32 @@ export class TrackGenerator {
   }
 
   /**
+   * Get progress within current game section (0.0 to 1.0)
+   */
+  public getSectionProgress(position: THREE.Vector3): number {
+    const sectionLength = this.gameConfig.tracks.segmentLength * 2.5;
+    return (position.z % sectionLength) / sectionLength;
+  }
+
+  /**
+   * Get the length of a game section (2.5x railway portion length)
+   */
+  public getSectionLength(): number {
+    return this.gameConfig.tracks.segmentLength * 2.5;
+  }
+
+  /**
    * Check if we're approaching a segment boundary (for input handling)
    */
   public isApproachingSegmentBoundary(position: THREE.Vector3, threshold: number = 0.8): boolean {
     return this.getSegmentProgress(position) > threshold;
+  }
+
+  /**
+   * Check if we're approaching a section boundary (for gameplay elements)
+   */
+  public isApproachingSectionBoundary(position: THREE.Vector3, threshold: number = 0.8): boolean {
+    return this.getSectionProgress(position) > threshold;
   }
 
   /**

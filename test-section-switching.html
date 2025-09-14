@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Section-Based Track Switching Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+            max-width: 400px;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background: #45a049;
+        }
+
+        .button.selected {
+            background: #FF6B35;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        <div><strong>Section-Based Track Switching Test</strong></div>
+        <div>🔴 Red lines mark section boundaries (every 62.5 units)</div>
+        <div>🚋 Track switching only occurs at red lines</div>
+        <div>💛 Yellow preview (first 50% of section) → 🧡 Orange (final 50%)</div>
+        <div>🟢 Green solid when trolley transitions onto track</div>
+        <div>⚡ Track changes happen instantly at red lines</div>
+        <div id="position">Position: 0</div>
+        <div id="section">Section: 0 (0% through)</div>
+        <div id="track">Current Track: 3</div>
+        <div id="selected">Selected Track: 3</div>
+        <div id="preview">Preview: None</div>
+        <div id="distance">Distance to Section End: 62.5</div>
+    </div>
+
+    <div id="controls">
+        <div><strong>Track Selection</strong></div>
+        <button class="button" id="track1" onclick="selectTrack(1)">Track 1</button>
+        <button class="button" id="track2" onclick="selectTrack(2)">Track 2</button>
+        <button class="button selected" id="track3" onclick="selectTrack(3)">Track 3</button>
+        <button class="button" id="track4" onclick="selectTrack(4)">Track 4</button>
+        <button class="button" id="track5" onclick="selectTrack(5)">Track 5</button>
+        <div style="margin-top: 10px;">
+            <button class="button" onclick="toggleMovement()">Start/Stop</button>
+            <button class="button" onclick="resetTrolley()">Reset</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TrackGenerator } from './src/systems/TrackGenerator.js';
+        import { TrolleyController } from './src/systems/TrolleyController.js';
+        import { InputManager } from './src/systems/InputManager.js';
+        import { DEFAULT_CONFIG } from './src/models/GameConfig.js';
+
+        console.log('Enhanced Section-Based Track Switching Test - Starting...');
+
+        // Get elements
+        const canvas = document.getElementById('gameCanvas');
+        const positionDiv = document.getElementById('position');
+        const sectionDiv = document.getElementById('section');
+        const trackDiv = document.getElementById('track');
+        const selectedDiv = document.getElementById('selected');
+        const previewDiv = document.getElementById('preview');
+        const distanceDiv = document.getElementById('distance');
+
+        // Three.js setup
+        let scene, camera, renderer, trackGenerator, trolleyController, inputManager;
+        let trolleySpeed = 4;
+        let frameCount = 0;
+        let isMoving = false;
+
+        function initializeThreeJS() {
+            console.log('Initializing Three.js...');
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create perspective camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, -10);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            console.log('Three.js initialized successfully!');
+        }
+
+        function initializeGame() {
+            console.log('Initializing enhanced section-based switching test...');
+
+            // Create ground
+            const groundGeometry = new THREE.PlaneGeometry(300, 100);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Initialize track generator
+            trackGenerator = new TrackGenerator(scene, DEFAULT_CONFIG);
+            trackGenerator.initialize();
+
+            console.log('Railway portion length:', DEFAULT_CONFIG.tracks.segmentLength);
+            console.log('Game section length:', trackGenerator.getSectionLength());
+
+            // Initialize trolley controller
+            trolleyController = new TrolleyController(DEFAULT_CONFIG);
+            trolleyController.createTrolley();
+            trolleyController.setPosition(new THREE.Vector3(0, 0.75, -50));
+            
+            // Add trolley to scene
+            const trolleyGroup = trolleyController.getTrolleyGroup();
+            if (trolleyGroup) {
+                scene.add(trolleyGroup);
+            }
+
+            // Initialize input manager with enhanced preview system
+            inputManager = new InputManager(scene, trolleyController, trackGenerator, DEFAULT_CONFIG);
+            inputManager.mount();
+
+            console.log('Enhanced section-based switching test initialized!');
+        }
+
+        function getCurrentSectionIndex(position) {
+            return trackGenerator.getCurrentSectionIndex(position);
+        }
+
+        function getSectionProgress(position) {
+            return trackGenerator.getSectionProgress(position);
+        }
+
+        function updateUI() {
+            if (trolleyController && trackGenerator && inputManager) {
+                const position = trolleyController.position;
+                const z = position.z;
+                const sectionIndex = getCurrentSectionIndex(position);
+                const sectionProgress = (getSectionProgress(position) * 100).toFixed(1);
+                const sectionLength = trackGenerator.getSectionLength();
+                const distanceToEnd = (sectionLength * (1 - getSectionProgress(position))).toFixed(1);
+                const currentTrack = trolleyController.currentTrack;
+                const selectedTrack = inputManager.getSelectedTrack();
+                const currentPreview = inputManager.getCurrentPreview();
+                
+                positionDiv.textContent = `Position: ${z.toFixed(1)}`;
+                sectionDiv.textContent = `Section: ${sectionIndex} (${sectionProgress}% through)`;
+                trackDiv.textContent = `Current Track: ${currentTrack}`;
+                selectedDiv.textContent = `Selected Track: ${selectedTrack}`;
+                
+                // Enhanced preview status with color information
+                let previewStatus = 'None';
+                if (currentPreview) {
+                    const progress = getSectionProgress(position);
+                    if (progress < 0.5) {
+                        previewStatus = 'Yellow (First 50%)';
+                    } else {
+                        previewStatus = 'Orange (Final 50%)';
+                    }
+                }
+                previewDiv.textContent = `Preview: ${previewStatus}`;
+                distanceDiv.textContent = `Distance to Section End: ${distanceToEnd}`;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            frameCount++;
+
+            // Move trolley if enabled
+            if (isMoving && trolleyController) {
+                const deltaTime = 0.016; // Approximate 60fps
+                const currentPos = trolleyController.position;
+                trolleyController.setPosition(new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z + trolleySpeed * deltaTime));
+
+                // Update trolley controller
+                trolleyController.update(deltaTime);
+
+                // Update track generation
+                if (trackGenerator) {
+                    trackGenerator.updateGeneration(trolleyController.position);
+                }
+
+                // Update input manager (handles enhanced preview system)
+                if (inputManager) {
+                    inputManager.update(deltaTime);
+                }
+
+                // Update camera to follow trolley
+                const targetCameraZ = trolleyController.position.z - 10;
+                camera.position.z += (targetCameraZ - camera.position.z) * 0.05;
+                camera.lookAt(trolleyController.position.x, 0, trolleyController.position.z + 10);
+
+                // Reset when too far
+                if (trolleyController.position.z > 300) {
+                    resetTrolley();
+                }
+            }
+
+            // Update UI every 10 frames
+            if (frameCount % 10 === 0) {
+                updateUI();
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Global functions for buttons
+        window.selectTrack = function(trackNumber) {
+            if (inputManager) {
+                inputManager.selectTrack(trackNumber);
+            }
+            
+            // Update button styles
+            document.querySelectorAll('.button').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById(`track${trackNumber}`).classList.add('selected');
+            
+            console.log(`Selected track ${trackNumber}`);
+        };
+
+        window.toggleMovement = function() {
+            isMoving = !isMoving;
+            console.log('Movement:', isMoving ? 'STARTED' : 'STOPPED');
+        };
+
+        window.resetTrolley = function() {
+            if (trolleyController && inputManager) {
+                trolleyController.setPosition(new THREE.Vector3(0, 0.75, -50));
+                inputManager.reset();
+                
+                // Reset UI
+                document.querySelectorAll('.button').forEach(btn => btn.classList.remove('selected'));
+                document.getElementById('track3').classList.add('selected');
+                
+                console.log('Trolley reset');
+            }
+        };
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // Initialize and start
+        initializeThreeJS();
+        initializeGame();
+        animate();
+    </script>
+</body>
+
+</html>

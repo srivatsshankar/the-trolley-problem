@@ -40,7 +40,8 @@ export class SegmentTransitionSystem {
 	}
 
 		/**
-		 * Update and execute any scheduled changes whose end-of-segment boundary has been reached.
+		 * Update and execute any scheduled changes whose section boundary has been reached.
+		 * Note: segmentIndex here represents the calculated segment where section boundary occurs
 		 */
 	public update(_deltaTime: number): void {
 		if (this.pending.length === 0) return;
@@ -49,12 +50,18 @@ export class SegmentTransitionSystem {
 		const segLen = this.config.tracks.segmentLength;
 		if (segLen <= 0) return;
 
-		// Execute all whose boundary z_b = segmentIndex * segLen has been crossed
+		// Execute all whose section boundary has been crossed
+		// The segmentIndex passed in represents where the section boundary occurs
 		const toExecute: ScheduledChange[] = [];
 		const remaining: ScheduledChange[] = [];
 		for (const sc of this.pending) {
-				const boundaryZ = (sc.segmentIndex + 1) * segLen; // end of segment
-				if (z + this.EPS >= boundaryZ) {
+			// Calculate the actual Z position where this transition should occur
+			// This is based on section boundaries (every 2.5 segments = 62.5 units)
+			const sectionLength = segLen * 2.5;
+			const sectionIndex = Math.floor((sc.segmentIndex * segLen) / sectionLength);
+			const boundaryZ = (sectionIndex + 1) * sectionLength; // section boundary
+			
+			if (z + this.EPS >= boundaryZ) {
 				toExecute.push(sc);
 			} else {
 				remaining.push(sc);
@@ -67,6 +74,7 @@ export class SegmentTransitionSystem {
 		// Execute in order
 		for (const sc of toExecute) {
 			this.trolleyController.switchToTrack(sc.trackNumber);
+			console.log(`[SegmentTransitionSystem] Executed track change to ${sc.trackNumber} at section boundary`);
 		}
 	}
 

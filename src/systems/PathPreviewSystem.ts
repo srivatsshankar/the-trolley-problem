@@ -205,7 +205,7 @@ export class PathPreviewSystem {
   }
   
   /**
-   * Create curved path geometry between current and target track
+   * Create curved path geometry that matches the exact shape the trolley will follow
    */
   private createCurvedPath(trackNumber: number, segmentIndex: number): THREE.Curve<THREE.Vector3> | null {
     // Validate track number
@@ -213,9 +213,6 @@ export class PathPreviewSystem {
       console.warn(`[PathPreviewSystem] Invalid track number: ${trackNumber}`);
       return null;
     }
-    
-    const segmentLength = this.gameConfig.tracks.segmentLength;
-    const segmentZ = segmentIndex * segmentLength;
     
     // Get current trolley position and track
     const trolleyPos = this.trolleyController.position;
@@ -238,16 +235,27 @@ export class PathPreviewSystem {
       return null;
     }
     
-    // Create smooth S-curve transition using CurvedRailwayTrack helper
-    const startZ = Math.max(trolleyPos.z, segmentZ - segmentLength * 0.8);
-    const endZ = segmentZ + segmentLength * 0.3;
+    // Calculate the next section boundary where transition will occur
+    const sectionLength = this.gameConfig.tracks.segmentLength * 2.5; // Section is 2.5x segment length
+    const currentSectionIndex = Math.floor(trolleyPos.z / sectionLength);
+    const nextSectionBoundaryZ = (currentSectionIndex + 1) * sectionLength;
     
+    // Simulate the exact curve the trolley will create when it transitions
+    // Use the same parameters as TrolleyController.switchToTrack()
+    const trolleySpeed = Math.max(this.trolleyController.speed, this.trolleyController.baseSpeed);
+    const transitionDuration = 1.0; // Same as TrolleyController._transitionDuration
+    
+    // The trolley's curve starts at the boundary and extends forward based on speed × duration
+    const startZ = nextSectionBoundaryZ;
+    const endZ = nextSectionBoundaryZ + trolleySpeed * transitionDuration;
+    
+    // Use the exact same curve generation method as TrolleyController
     const curve = CurvedRailwayTrack.createTrackTransition(
       currentX,
       targetX,
       startZ,
       endZ,
-      0.05 // Slight elevation for visibility
+      0.05 // Same elevation as TrolleyController
     );
     
     return curve;
@@ -469,6 +477,32 @@ export class PathPreviewSystem {
     if (newConfig.opaqueOpacity !== undefined) {
       this.opaqueMaterial.opacity = this.config.opaqueOpacity;
     }
+  }
+
+  /**
+   * Update preview color for dynamic color changes based on trolley position
+   * Used by InputManager to show yellow/orange preview colors
+   */
+  public updatePreviewColor(trackNumber: number, color: number, opacity: number): void {
+    this.activePaths.forEach((path, pathKey) => {
+      if (path.trackNumber === trackNumber && path.isTranslucent) {
+        // Update the curved track colors
+        path.curvedTrack.group.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const material = child.material as THREE.Material;
+            if ('color' in material) {
+              (material as any).color.setHex(color);
+            }
+            if (material.transparent) {
+              material.opacity = opacity;
+            }
+          }
+        });
+        
+        // Update path opacity tracking
+        path.opacity = opacity;
+      }
+    });
   }
 
   /**

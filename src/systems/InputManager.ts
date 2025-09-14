@@ -1,5 +1,6 @@
 /**
- * InputManager - Handles input system and track selection logic with queuing
+ * InputManager - Handles input system and track selection logic
+ * Simple approach: Check which button is pressed when trolley reaches section boundary
  * Implements requirements: 4.3, 4.4, 4.5, 5.1, 5.2
  */
 
@@ -8,16 +9,9 @@ import { TrolleyController } from './TrolleyController';
 import { TrackGenerator } from './TrackGenerator';
 import { GameConfig } from '../models/GameConfig';
 import { PathPreviewSystem, createPathPreviewSystem } from './PathPreviewSystem';
-// Removed unused CurvedTrackSystem
-import { SegmentTransitionSystem, createSegmentTransitionSystem } from './SegmentTransitionSystem';
+// Removed unused CurvedTrackSystem and SegmentTransitionSystem (no queue needed)
 import * as THREE from 'three';
 import { CurvedRailwayTrack } from '../models/CurvedRailwayTrack';
-
-export interface TrackSelectionQueue {
-  trackNumber: number;
-  segmentIndex: number;
-  isProcessed: boolean;
-}
 
 export interface PathPreview {
   trackNumber: number;
@@ -32,59 +26,54 @@ export class InputManager {
   private trolleyController: TrolleyController;
   private gameConfig: GameConfig;
   private scene: THREE.Scene;
-  
-  // Track selection queuing system
-  private selectionQueue: TrackSelectionQueue[] = [];
-  private lastProcessedSegment: number = -1;
-  
+
+  // Section-based state tracking (sections are 2.5x railway portions)
+  private lastProcessedSection: number = -1;
+
   // Enhanced path preview system
   private pathPreviewSystem: PathPreviewSystem;
-  
-  // Segment transition system (enforces end-of-segment switching)
-  private segmentTransitionSystem: SegmentTransitionSystem;
-  
-  // Legacy path preview system (for backward compatibility)
-  private pathPreviews: Map<number, PathPreview> = new Map();
+
+
+
+  // Track generator reference for section calculations
+  private trackGenerator: TrackGenerator;
+
+  // Single preview for the current transition
+  private currentPreview: PathPreview | null = null;
   private previewMaterial: THREE.Material;
-  private solidMaterial: THREE.Material;
-  
-  // State tracking
+
+
+
+  // State tracking - only track currently pressed button
   private isEnabled: boolean = true;
-  private currentSelectedTrack: number = 1;
-  
+  private currentSelectedTrack: number = 3; // Default to track 3
+
   constructor(
     scene: THREE.Scene,
     trolleyController: TrolleyController,
-    _trackGenerator: TrackGenerator,
+    trackGenerator: TrackGenerator,
     gameConfig: GameConfig
   ) {
     this.scene = scene;
     this.trolleyController = trolleyController;
-
+    this.trackGenerator = trackGenerator;
     this.gameConfig = gameConfig;
-    
+
     // Create track selector UI component
     this.trackSelector = new TrackSelector(DEFAULT_TRACK_SELECTOR_CONFIG);
-    
-  // Create enhanced path preview system
-  this.pathPreviewSystem = createPathPreviewSystem(scene, trolleyController, gameConfig);
-    
-  // Create segment transition system to enforce end-of-segment switching
-  this.segmentTransitionSystem = createSegmentTransitionSystem(trolleyController, gameConfig);
-    
-    // Create materials for legacy path preview (backward compatibility)
+
+    // Create enhanced path preview system
+    this.pathPreviewSystem = createPathPreviewSystem(scene, trolleyController, gameConfig);
+
+
+
+    // Create material for path preview
     this.previewMaterial = new THREE.MeshLambertMaterial({
       color: 0xffff00, // Yellow for preview
       transparent: true,
-      opacity: 0.3
+      opacity: 0.6
     });
-    
-    this.solidMaterial = new THREE.MeshLambertMaterial({
-      color: 0xffa500, // Orange for confirmed path
-      transparent: false,
-      opacity: 1.0
-    });
-    
+
     this.setupEventHandlers();
 
     // Connect trolley transition callbacks to show/hide the physical curved connector
@@ -98,7 +87,7 @@ export class InputManager {
     });
     console.log('[InputManager] Created with enhanced track selection and path preview system');
   }
-  
+
   /**
    * Set up event handlers for track selection
    */
@@ -114,294 +103,333 @@ export class InputManager {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (!this.isEnabled) return;
-    if (['1','2','3','4','5'].includes(event.key)) {
+    if (['1', '2', '3', '4', '5'].includes(event.key)) {
       const track = parseInt(event.key, 10);
       this.selectTrack(track);
     }
   };
-  
+
   /**
-   * Handle track selection and add to queue
-   * Requirement 4.3: Queue track number when button is pressed
+   * Handle track selection - update the currently selected track and refresh preview
    */
   private handleTrackSelection(trackNumber: number): void {
     if (!this.isEnabled) {
       return;
     }
-    
+
+    const previousTrack = this.currentSelectedTrack;
     this.currentSelectedTrack = trackNumber;
     
-    // Calculate which segment this selection will apply to
-    const trolleyPosition = this.trolleyController.position;
-    const segmentLength = this.gameConfig.tracks.segmentLength;
-    const currentSegment = Math.floor(trolleyPosition.z / segmentLength);
-    const targetSegment = currentSegment + 1; // Apply to next segment
-    
-    // Add to queue (replace any existing selection for this segment)
-    this.addToQueue(trackNumber, targetSegment);
-    
-    // Update path preview
-    this.updatePathPreview(trackNumber, targetSegment);
-    
-    console.log(`[InputManager] Track ${trackNumber} queued for segment ${targetSegment}`);
-  }
-  
-  /**
-   * Add track selection to queue
-   */
-  private addToQueue(trackNumber: number, segmentIndex: number): void {
-    // Remove any existing queue entry for this segment
-    this.selectionQueue = this.selectionQueue.filter(
-      entry => entry.segmentIndex !== segmentIndex
-    );
-    
-    // Add new selection to queue
-    const queueEntry: TrackSelectionQueue = {
-      trackNumber,
-      segmentIndex,
-      isProcessed: false
-    };
-    
-    this.selectionQueue.push(queueEntry);
-    
-    // Sort queue by segment index
-    this.selectionQueue.sort((a, b) => a.segmentIndex - b.segmentIndex);
-  }
-  
-  /**
-   * Update path preview system
-   * Requirement 5.1: Curved path appears translucent before segment
-   * Requirement 5.2: Path becomes opaque after button check
-   */
-  private updatePathPreview(trackNumber: number, segmentIndex: number): void {
-    // Use enhanced path preview system
-    this.pathPreviewSystem.createPathPreview(trackNumber, segmentIndex);
-    
-    // Legacy system for backward compatibility
-    const existingPreview = this.pathPreviews.get(segmentIndex);
-    if (existingPreview && existingPreview.mesh) {
-      this.scene.remove(existingPreview.mesh);
-      existingPreview.mesh.geometry.dispose();
-      if (Array.isArray(existingPreview.mesh.material)) {
-        existingPreview.mesh.material.forEach(mat => mat.dispose());
+    // If track selection changed, immediately update preview if we're in preview range
+    if (previousTrack !== trackNumber) {
+      const trolleyPosition = this.trolleyController.position;
+      const currentSection = this.trackGenerator.getCurrentSectionIndex(trolleyPosition);
+      const sectionProgress = this.trackGenerator.getSectionProgress(trolleyPosition);
+      const sectionLength = this.trackGenerator.getSectionLength();
+      const distanceToSectionEnd = sectionLength * (1 - sectionProgress);
+      const previewThreshold = sectionLength * 0.3;
+
+      // Update preview immediately since we show it throughout the section
+      const currentTrack = this.trolleyController.currentTrack;
+      
+      if (this.currentSelectedTrack !== currentTrack) {
+        // Clear old preview and create new one
+        this.clearCurrentPreview();
+        this.createPreviewAtNextSectionBoundary(this.currentSelectedTrack, currentSection);
+        this.updatePreviewColor(sectionProgress);
       } else {
-        existingPreview.mesh.material.dispose();
+        // Selected same track as current, clear preview
+        this.clearCurrentPreview();
       }
     }
     
-    // Create legacy path preview for backward compatibility
-    const preview = this.createPathPreview(trackNumber, segmentIndex);
-    this.pathPreviews.set(segmentIndex, preview);
-    
+    console.log(`[InputManager] Track ${trackNumber} selected`);
+  }
+
+  /**
+   * Create preview for the track transition at the next section boundary
+   */
+  private createPreviewAtNextSectionBoundary(trackNumber: number, currentSectionIndex: number): void {
+    // Clear any existing preview
+    this.clearCurrentPreview();
+
+    // Calculate the next section boundary where the transition will occur
+    const sectionLength = this.trackGenerator.getSectionLength();
+    const segmentLength = this.gameConfig.tracks.segmentLength;
+    const nextSectionBoundaryZ = (currentSectionIndex + 1) * sectionLength;
+    const segmentIndex = Math.floor(nextSectionBoundaryZ / segmentLength);
+
+    // Use enhanced path preview system
+    this.pathPreviewSystem.createPathPreview(trackNumber, segmentIndex);
+
+    // Create preview for the exact location where trolley will transition
+    const preview = this.createPathPreviewAtBoundary(trackNumber, nextSectionBoundaryZ);
+    this.currentPreview = preview;
+
     if (preview.mesh) {
       this.scene.add(preview.mesh);
     }
+
+    console.log(`[InputManager] Created preview for track ${trackNumber} at next section boundary Z=${nextSectionBoundaryZ}`);
   }
-  
+
   /**
-   * Create curved path preview mesh
+   * Create curved path preview mesh that matches the exact shape the trolley will follow
    */
-  private createPathPreview(trackNumber: number, segmentIndex: number): PathPreview {
-    const segmentLength = this.gameConfig.tracks.segmentLength;
-    const segmentZ = segmentIndex * segmentLength;
-    
+  private createPathPreviewAtBoundary(trackNumber: number, boundaryZ: number): PathPreview {
     // Get current and target track positions
     const currentTrack = this.trolleyController.currentTrack;
     const currentX = this.trolleyController.getTrackPosition(currentTrack);
     const targetX = this.trolleyController.getTrackPosition(trackNumber);
+
+    // Simulate the exact curve the trolley will create when it transitions
+    // The trolley creates its curve when it reaches the boundary, using its current speed and transition duration
+    const trolleySpeed = Math.max(this.trolleyController.speed, this.trolleyController.baseSpeed);
+    const transitionDuration = 1.0; // Same as TrolleyController._transitionDuration
     
-    // Create smooth curved path geometry using improved curve generation
+    // The trolley's curve will start at the boundary and extend forward based on speed × duration
+    const startZ = boundaryZ;
+    const endZ = boundaryZ + trolleySpeed * transitionDuration;
+
+    // Use the exact same curve generation method as TrolleyController
     const curve = CurvedRailwayTrack.createTrackTransition(
       currentX,
       targetX,
-      segmentZ - segmentLength * 0.5,
-      segmentZ,
-      0.1
+      startZ,
+      endZ,
+      0.05 // Same elevation as TrolleyController (0.05)
     );
-    
-    // const points = curve.getPoints(20);
-    // const _geometry = new THREE.BufferGeometry().setFromPoints(points);
-    
-    // Create tube geometry for better visibility
-    const tubeGeometry = new THREE.TubeGeometry(curve, 20, 0.1, 8, false);
+
+    // Create tube geometry that matches the visual style
+    const tubeGeometry = new THREE.TubeGeometry(curve, 32, 0.1, 8, false);
     const mesh = new THREE.Mesh(tubeGeometry, this.previewMaterial.clone());
-    
+
+    // Store creation parameters for future comparison
+    mesh.userData = {
+      creationSpeed: trolleySpeed,
+      creationTime: Date.now(),
+      trackTransition: `${currentTrack}->${trackNumber}`
+    };
+
+    // Calculate segment index for tracking
+    const segmentLength = this.gameConfig.tracks.segmentLength;
+    const segmentIndex = Math.floor(boundaryZ / segmentLength);
+
+    console.log(`[InputManager] Created preview curve: Track ${currentTrack}->${trackNumber}, X=${currentX.toFixed(1)}->${targetX.toFixed(1)}, Z=${startZ.toFixed(1)}->${endZ.toFixed(1)} (speed=${trolleySpeed.toFixed(1)}, duration=${transitionDuration})`);
+
     return {
       trackNumber,
       segmentIndex,
       isVisible: true,
-      opacity: 0.3,
+      opacity: 0.4,
       mesh
     };
   }
-  
+
   /**
    * Update input system - called each frame
-   * Requirement 4.4: Check button when entering segment
    */
   public update(deltaTime: number): void {
     if (!this.isEnabled) {
       return;
     }
-    
+
     // Update enhanced path preview system
     this.pathPreviewSystem.update(deltaTime);
-    
-  // Update segment transition system (executes switches exactly at boundaries)
-  this.segmentTransitionSystem.update(deltaTime);
-    
-    // Check if trolley has entered a new segment
-    const trolleyPosition = this.trolleyController.position;
-    const segmentLength = this.gameConfig.tracks.segmentLength;
-    const currentSegment = Math.floor(trolleyPosition.z / segmentLength);
-    const upcomingSegment = currentSegment + 1;
 
-    // Auto-enqueue the currently pressed button for the upcoming segment
-    // Requirement: before entering a new segment, enqueue the pressed value
-    const hasUpcoming = this.selectionQueue.some(e => e.segmentIndex === upcomingSegment);
-    if (!hasUpcoming) {
-      // Ensure exactly one queued value for the upcoming segment at all times
-      this.addToQueue(this.currentSelectedTrack, upcomingSegment);
-      this.updatePathPreview(this.currentSelectedTrack, upcomingSegment);
-      console.log(`[InputManager] Auto-queued track ${this.currentSelectedTrack} for segment ${upcomingSegment}`);
-    }
-    
-    if (currentSegment > this.lastProcessedSegment) {
-      this.processSegmentEntry(currentSegment);
-      this.lastProcessedSegment = currentSegment;
-    }
-    
-    // Update legacy path preview opacities
-    this.updatePathPreviewOpacities();
-    
-    // Clean up old previews
-    this.cleanupOldPreviews(currentSegment);
-  }
-  
-  /**
-   * Process segment entry and apply queued track selections
-   * Requirement 4.4: Check which button is pressed when entering segment
-   * Requirement 4.5: Move trolley along curved path to selected track
-   */
-  private processSegmentEntry(segmentIndex: number): void {
-    // Find queued selection for this segment
-    const queueEntry = this.selectionQueue.find(
-      entry => entry.segmentIndex === segmentIndex && !entry.isProcessed
-    );
-    
-    if (queueEntry) {
-      // Schedule track selection for execution at the END of this segment
-      // This guarantees the actual switch happens exactly at the boundary
-      this.segmentTransitionSystem.scheduleTrackChange(queueEntry.trackNumber, segmentIndex);
-      queueEntry.isProcessed = true;
-      
-      // Update path preview to solid (opaque)
-      this.makePathPreviewSolid(segmentIndex);
-      
-  console.log(`[InputManager] Scheduled track selection ${queueEntry.trackNumber} for end of segment ${segmentIndex}`);
-    } else {
-      // No selection queued, continue on current track
-      const currentTrack = this.trolleyController.currentTrack;
-      console.log(`[InputManager] No track selection queued for segment ${segmentIndex}, continuing on track ${currentTrack}`);
-    }
-    
-    // Remove processed entries from queue
-    this.selectionQueue = this.selectionQueue.filter(entry => !entry.isProcessed);
-  }
-  
-  /**
-   * Make path preview solid (opaque) after button check
-   * Requirement 5.2: Path becomes opaque after button check
-   */
-  private makePathPreviewSolid(segmentIndex: number): void {
-    // Use enhanced path preview system
-    const queueEntry = this.selectionQueue.find(entry => entry.segmentIndex === segmentIndex);
-    if (queueEntry) {
-      this.pathPreviewSystem.makePathOpaque(queueEntry.trackNumber, segmentIndex);
-    }
-    
-    // Legacy system for backward compatibility
-    const preview = this.pathPreviews.get(segmentIndex);
-    if (preview && preview.mesh) {
-      // Replace material with solid version
-      if (preview.mesh.material) {
-        if (Array.isArray(preview.mesh.material)) {
-          preview.mesh.material.forEach(mat => mat.dispose());
-        } else {
-          preview.mesh.material.dispose();
-        }
-      }
-      
-      preview.mesh.material = this.solidMaterial.clone();
-      preview.opacity = 1.0;
-      preview.isVisible = true;
-    }
-  }
-  
-  /**
-   * Update path preview opacities based on distance to segment
-   */
-  private updatePathPreviewOpacities(): void {
+
+
+    // Check trolley position and handle preview/transition logic
     const trolleyPosition = this.trolleyController.position;
-    const segmentLength = this.gameConfig.tracks.segmentLength;
-    const currentSegment = Math.floor(trolleyPosition.z / segmentLength);
-    
-    this.pathPreviews.forEach((preview, segmentIndex) => {
-      if (!preview.mesh) return;
-      
-      const distance = Math.abs(segmentIndex - currentSegment);
-      
-      // Fade out previews that are far away
-      if (distance > 3) {
-        preview.opacity = 0.1;
-      } else if (distance > 1) {
-        preview.opacity = 0.2;
-      } else {
-        preview.opacity = 0.3;
+    const currentSection = this.trackGenerator.getCurrentSectionIndex(trolleyPosition);
+
+    // Handle preview creation when approaching section end
+    this.handlePreviewLogic(trolleyPosition, currentSection);
+
+    // Handle section transitions - check for section boundary crossings
+    if (currentSection > this.lastProcessedSection) {
+      // Process each section boundary we've crossed
+      for (let section = this.lastProcessedSection + 1; section <= currentSection; section++) {
+        this.processSectionEntry(section);
       }
-      
-      // Update material opacity
-      if (preview.mesh.material && 'opacity' in preview.mesh.material) {
-        (preview.mesh.material as any).opacity = preview.opacity;
-      }
-    });
+      this.lastProcessedSection = currentSection;
+    }
   }
-  
+
   /**
-   * Clean up old path previews
+   * Handle preview logic - show preview throughout the section if track will change
+   * Enhanced with dynamic color changes based on trolley position within section
    */
-  private cleanupOldPreviews(currentSegment: number): void {
-    const cleanupDistance = 5; // Keep previews for 5 segments behind
-    
-    this.pathPreviews.forEach((preview, segmentIndex) => {
-      if (segmentIndex < currentSegment - cleanupDistance) {
-        if (preview.mesh) {
-          this.scene.remove(preview.mesh);
-          preview.mesh.geometry.dispose();
-          if (Array.isArray(preview.mesh.material)) {
-            preview.mesh.material.forEach(mat => mat.dispose());
-          } else {
-            preview.mesh.material.dispose();
-          }
-        }
-        this.pathPreviews.delete(segmentIndex);
+  private handlePreviewLogic(trolleyPosition: THREE.Vector3, currentSection: number): void {
+    // Calculate section progress
+    const sectionProgress = this.trackGenerator.getSectionProgress(trolleyPosition);
+    const currentTrack = this.trolleyController.currentTrack;
+
+    // Show preview throughout the entire section if selected track is different from current
+    if (this.currentSelectedTrack !== currentTrack) {
+      // Check if we need to recreate the preview due to speed changes
+      const needsRecreation = !this.currentPreview || 
+        this.currentPreview.trackNumber !== this.currentSelectedTrack ||
+        this.shouldRecreatePreviewForSpeedChange();
+      
+      if (needsRecreation) {
+        this.createPreviewAtNextSectionBoundary(this.currentSelectedTrack, currentSection);
       }
-    });
+      
+      // Update preview color based on trolley position within section
+      this.updatePreviewColor(sectionProgress);
+    } else {
+      // If selected track is same as current, clear any existing preview
+      this.clearCurrentPreview();
+    }
   }
-  
+
+  /**
+   * Check if preview needs to be recreated due to significant speed changes
+   * Since curve shape depends on trolley speed, we need to update when speed changes significantly
+   */
+  private shouldRecreatePreviewForSpeedChange(): boolean {
+    if (!this.currentPreview) return false;
+    
+    // Store the speed used to create the current preview
+    if (!this.currentPreview.mesh?.userData.creationSpeed) {
+      return true; // No speed stored, recreate
+    }
+    
+    const currentSpeed = Math.max(this.trolleyController.speed, this.trolleyController.baseSpeed);
+    const creationSpeed = this.currentPreview.mesh.userData.creationSpeed;
+    const speedChangeThreshold = 0.2; // 20% change threshold
+    
+    return Math.abs(currentSpeed - creationSpeed) / creationSpeed > speedChangeThreshold;
+  }
+
+  /**
+   * Update preview color based on trolley position within the current section
+   * Yellow when in first 50% of section, Orange when in final 50%
+   */
+  private updatePreviewColor(sectionProgress: number): void {
+    if (!this.currentPreview || !this.currentPreview.mesh) return;
+
+    let previewColor: number;
+    let previewOpacity: number;
+
+    if (sectionProgress < 0.5) {
+      // First 50% of section - Yellow preview
+      previewColor = 0xFFD700; // Gold/Yellow
+      previewOpacity = 0.4;
+    } else {
+      // Final 50% of section - Orange preview (more likely to follow this path)
+      previewColor = 0xFF8C00; // Dark Orange
+      previewOpacity = 0.6;
+    }
+
+    // Update the preview material color and opacity
+    const material = this.currentPreview.mesh.material as THREE.Material;
+    if ('color' in material) {
+      (material as any).color.setHex(previewColor);
+    }
+    material.opacity = previewOpacity;
+
+    // Also update the enhanced path preview system
+    this.pathPreviewSystem.updatePreviewColor(this.currentSelectedTrack, previewColor, previewOpacity);
+  }
+
+  /**
+   * Process section entry - check which button is pressed and execute track change immediately
+   */
+  private processSectionEntry(sectionIndex: number): void {
+    // Check if we're at a section boundary where track changes can occur
+    const trolleyPosition = this.trolleyController.position;
+    const sectionLength = this.trackGenerator.getSectionLength();
+    const sectionBoundaryZ = sectionIndex * sectionLength;
+
+    // Check if trolley has reached the section boundary (with small tolerance)
+    const tolerance = 1.0;
+    if (trolleyPosition.z >= sectionBoundaryZ - tolerance) {
+      const currentTrack = this.trolleyController.currentTrack;
+
+      if (this.currentSelectedTrack !== currentTrack) {
+        // Make preview solid/opaque before executing the transition
+        if (this.currentPreview) {
+          this.makePreviewSolid();
+        }
+
+        // Execute track change immediately at section boundary
+        this.trolleyController.switchToTrack(this.currentSelectedTrack);
+
+        // Clear preview after a short delay to show the solid transition
+        setTimeout(() => {
+          this.clearCurrentPreview();
+        }, 500);
+
+        console.log(`[InputManager] Executed track change to ${this.currentSelectedTrack} at section ${sectionIndex} boundary`);
+      } else {
+        // No track change needed, clear any preview
+        this.clearCurrentPreview();
+        console.log(`[InputManager] No track change needed at section ${sectionIndex}, staying on track ${currentTrack}`);
+      }
+    }
+  }
+
+  /**
+   * Make the current preview solid to indicate the trolley is transitioning onto it
+   */
+  private makePreviewSolid(): void {
+    if (!this.currentPreview || !this.currentPreview.mesh) return;
+
+    // Change to solid green color to indicate active transition
+    const material = this.currentPreview.mesh.material as THREE.Material;
+    if ('color' in material) {
+      (material as any).color.setHex(0x00FF00); // Bright green for active transition
+    }
+    material.transparent = false;
+    material.opacity = 1.0;
+
+    // Also update the enhanced path preview system
+    this.pathPreviewSystem.makePathOpaque(this.currentPreview.trackNumber, this.currentPreview.segmentIndex);
+    
+    console.log(`[InputManager] Made preview solid for active transition`);
+  }
+
+
+
+  /**
+   * Clear the current preview
+   */
+  private clearCurrentPreview(): void {
+    if (!this.currentPreview) return;
+
+    // Clear enhanced path preview system
+    this.pathPreviewSystem.clearAllPaths();
+
+    // Clear current preview
+    if (this.currentPreview.mesh) {
+      this.scene.remove(this.currentPreview.mesh);
+      this.currentPreview.mesh.geometry.dispose();
+      if (Array.isArray(this.currentPreview.mesh.material)) {
+        this.currentPreview.mesh.material.forEach(mat => mat.dispose());
+      } else {
+        this.currentPreview.mesh.material.dispose();
+      }
+    }
+
+    this.currentPreview = null;
+  }
+
   /**
    * Mount the track selector UI to the DOM
    */
   public mount(): void {
     this.trackSelector.mount();
-  // Default pressed is track 3
-  const prev = this.isEnabled; this.isEnabled = false; // avoid queueing on initial select
-  this.trackSelector.selectTrack(3);
-  this.currentSelectedTrack = 3;
-  this.isEnabled = prev;
+    // Default pressed is track 3
+    const prev = this.isEnabled;
+    this.isEnabled = false; // avoid triggering logic on initial select
+    this.trackSelector.selectTrack(3);
+    this.currentSelectedTrack = 3;
+    this.isEnabled = prev;
     console.log('[InputManager] Track selector UI mounted');
   }
-  
+
   /**
    * Unmount the track selector UI from the DOM
    */
@@ -409,7 +437,7 @@ export class InputManager {
     this.trackSelector.unmount();
     console.log('[InputManager] Track selector UI unmounted');
   }
-  
+
   /**
    * Enable or disable input system
    */
@@ -418,112 +446,70 @@ export class InputManager {
     this.trackSelector.setEnabled(enabled);
     console.log(`[InputManager] ${enabled ? 'Enabled' : 'Disabled'}`);
   }
-  
+
   /**
    * Get currently selected track
    */
   public getSelectedTrack(): number {
     return this.currentSelectedTrack;
   }
-  
+
   /**
-   * Get current selection queue
+   * Get current preview for debugging
    */
-  public getSelectionQueue(): TrackSelectionQueue[] {
-    return [...this.selectionQueue];
+  public getCurrentPreview(): PathPreview | null {
+    return this.currentPreview;
   }
-  
-  /**
-   * Get path previews for debugging
-   */
-  public getPathPreviews(): Map<number, PathPreview> {
-    return new Map(this.pathPreviews);
-  }
-  
+
   /**
    * Force select a track (for testing or programmatic control)
    */
   public selectTrack(trackNumber: number): void {
     this.trackSelector.selectTrack(trackNumber);
   }
-  
-  /**
-   * Clear all queued selections
-   */
-  public clearQueue(): void {
-    this.selectionQueue = [];
-    console.log('[InputManager] Selection queue cleared');
-  }
-  
+
   /**
    * Reset input system to initial state
    */
   public reset(): void {
-    this.clearQueue();
+    this.lastProcessedSection = -1;
+    this.currentSelectedTrack = 3; // Reset to default track 3
 
-    this.lastProcessedSegment = -1;
-    this.currentSelectedTrack = 1;
-    
     // Temporarily disable to avoid triggering selection handler
     const wasEnabled = this.isEnabled;
     this.isEnabled = false;
-    this.trackSelector.selectTrack(1);
+    this.trackSelector.selectTrack(3);
     this.isEnabled = wasEnabled;
-    
-    // Clear all path previews
-    this.pathPreviews.forEach(preview => {
-      if (preview.mesh) {
-        this.scene.remove(preview.mesh);
-        preview.mesh.geometry.dispose();
-        if (Array.isArray(preview.mesh.material)) {
-          preview.mesh.material.forEach(mat => mat.dispose());
-        } else {
-          preview.mesh.material.dispose();
-        }
-      }
-    });
-    this.pathPreviews.clear();
-    
+
+    // Clear current preview
+    this.clearCurrentPreview();
+
     console.log('[InputManager] Reset to initial state');
   }
-  
+
   /**
    * Get path preview system for external access
    */
   public getPathPreviewSystem(): PathPreviewSystem {
     return this.pathPreviewSystem;
   }
-  
+
   /**
    * Dispose of all resources
    */
   public dispose(): void {
-  window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keydown', this.onKeyDown);
     this.trackSelector.dispose();
-    
+
     // Dispose of enhanced path preview system
     this.pathPreviewSystem.dispose();
-    
-    // Dispose of legacy materials
+
+    // Dispose of material
     this.previewMaterial.dispose();
-    this.solidMaterial.dispose();
-    
-    // Clean up legacy path previews
-    this.pathPreviews.forEach(preview => {
-      if (preview.mesh) {
-        this.scene.remove(preview.mesh);
-        preview.mesh.geometry.dispose();
-        if (Array.isArray(preview.mesh.material)) {
-          preview.mesh.material.forEach(mat => mat.dispose());
-        } else {
-          preview.mesh.material.dispose();
-        }
-      }
-    });
-    this.pathPreviews.clear();
-    
-    this.selectionQueue = [];
-    
+
+    // Clear current preview
+    this.clearCurrentPreview();
+
     console.log('[InputManager] Disposed');
   }
 }
