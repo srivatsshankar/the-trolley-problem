@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { Obstacle, createRandomObstacle, createObstacle, ObstacleType } from '../models/Obstacle';
+import { Obstacle, createObstacle, ObstacleType } from '../models/Obstacle';
 import { GameConfigManager } from '../models/GameConfig';
 import { TrackSegment } from './TrackGenerator';
 
@@ -18,7 +18,9 @@ export class ObstacleManager {
   private obstacles: Map<string, Obstacle> = new Map();
   private scene: THREE.Scene;
   private configManager: GameConfigManager;
-  
+  // Persist alternating type after section 5 so even single-obstacle segments flip types over time
+  private nextTypeAfterSection5: ObstacleType = 'trolley';
+
   constructor(scene: THREE.Scene, configManager: GameConfigManager) {
     this.scene = scene;
     this.configManager = configManager;
@@ -26,13 +28,13 @@ export class ObstacleManager {
 
   /**
    * Generate obstacles for a track segment
-   * Requirements: 6.1, 6.2 - One barrier per segment initially, random type selection
+   * Requirements: 6.1, 6.2 - One barrier per segment initially, alternating between rock and trolley
    */
   public generateObstaclesForSegment(segment: TrackSegment, segmentIndex: number): ObstacleGenerationResult {
     // const _config = this.configManager.getConfig();
     const barrierCount = this.configManager.getBarrierCount(segmentIndex);
     const trackCount = segment.tracks.length;
-    
+
     // Only generate obstacles for multi-track segments (5 tracks)
     if (trackCount !== 5) {
       return {
@@ -41,40 +43,56 @@ export class ObstacleManager {
         affectedTracks: []
       };
     }
-    
+
     const obstacles: Obstacle[] = [];
     const affectedTracks: number[] = [];
-    
+
     // Select random tracks for barriers
     const availableTracks = Array.from({ length: trackCount }, (_, i) => i);
     const selectedTracks = this.selectRandomTracks(availableTracks, barrierCount);
-    
+
+    // Determine section index (2.5 segments per section)
+    const sectionIndex = Math.floor(segmentIndex / 2.5);
+
+    // Determine obstacle type for this segment (all obstacles in segment use same type)
+    let obstacleType: ObstacleType;
+    if (sectionIndex >= 5) {
+      // Use persistent alternation across segments after section 5
+      obstacleType = this.nextTypeAfterSection5;
+      // Update for next segment
+      this.nextTypeAfterSection5 = this.nextTypeAfterSection5 === 'trolley' ? 'rock' : 'trolley';
+    } else {
+      // Before section 5, alternate by segment parity
+      // Even segments (0, 2, 4...) = rock, Odd segments (1, 3, 5...) = trolley
+      obstacleType = (segmentIndex % 2 === 0) ? 'rock' : 'trolley';
+    }
+
     // Generate obstacles on selected tracks
-    for (const trackIndex of selectedTracks) {
+    selectedTracks.forEach((trackIndex) => {
       const track = segment.tracks[trackIndex];
-      if (!track) continue;
-      
-      // Calculate obstacle position on the track
-      const obstaclePosition = this.calculateObstaclePosition(track.position, segment);
-      
-      // Create random obstacle
-      const obstacle = createRandomObstacle(obstaclePosition);
-      
+      if (!track) { return; }
+
+      // Calculate obstacle position on the track (all obstacles in segment use same type)
+      const obstaclePosition = this.calculateObstaclePosition(track.position, segment, obstacleType);
+
+      // Create obstacle with alternating type
+      const obstacle = createObstacle(obstacleType, obstaclePosition);
+
       // Add to scene
       this.scene.add(obstacle.getGroup());
-      
-  // Store obstacle with unique key keyed by actual railway portion (segment) index based on Z
-  const portionLength = this.configManager.getConfig().tracks.segmentLength;
-  const keySegmentIndex = Math.floor(obstaclePosition.z / portionLength);
-  const obstacleKey = `${keySegmentIndex}_${trackIndex}`;
+
+      // Store obstacle with unique key keyed by actual railway portion (segment) index based on Z
+      const portionLength = this.configManager.getConfig().tracks.segmentLength;
+      const keySegmentIndex = Math.floor(obstaclePosition.z / portionLength);
+      const obstacleKey = `${keySegmentIndex}_${trackIndex}`;
       this.obstacles.set(obstacleKey, obstacle);
-      
+
       obstacles.push(obstacle);
       affectedTracks.push(trackIndex);
-    }
-    
-    this.log(`Generated ${obstacles.length} obstacles for segment ${segmentIndex} on tracks [${affectedTracks.join(', ')}]`);
-    
+    });
+
+    this.log(`Generated ${obstacles.length} ${obstacleType} obstacles for segment ${segmentIndex} on tracks [${affectedTracks.join(', ')}]`);
+
     return {
       obstacles,
       barrierCount,
@@ -89,32 +107,51 @@ export class ObstacleManager {
   private selectRandomTracks(availableTracks: number[], count: number): number[] {
     const selected: number[] = [];
     const tracks = [...availableTracks];
-    
+
     for (let i = 0; i < Math.min(count, tracks.length); i++) {
       const randomIndex = Math.floor(Math.random() * tracks.length);
       const selectedTrack = tracks.splice(randomIndex, 1)[0];
       selected.push(selectedTrack);
     }
-    
+
     return selected.sort((a, b) => a - b);
   }
 
   /**
    * Calculate obstacle position on a track
    */
-  private calculateObstaclePosition(trackPosition: THREE.Vector3, segment: TrackSegment): THREE.Vector3 {
+  private calculateObstaclePosition(trackPosition: THREE.Vector3, segment: TrackSegment, type: ObstacleType): THREE.Vector3 {
     const config = this.configManager.getConfig();
     const segmentLength = config.tracks.segmentLength;
-    
+
     // Place obstacle within the central band of the section rules (approximate per segment)
     // Using 15% to 65% of the segment to align with section constraints when used standalone
     const minOffset = segmentLength * 0.15; // 15% from start
     const maxOffset = segmentLength * 0.65; // 65% from start
     const zOffset = minOffset + Math.random() * (maxOffset - minOffset);
-    
+
+    // Railway track constants (should match RailwayTrack.ts and Trolley.ts)
+    const RAIL_TOP_HEIGHT = 0.25; // tieHeight (0.15) + railHeight/2 (0.1)
+    const RAIL_HALF_HEIGHT = 0.1; // Half of rail height
+    const railsTop = RAIL_TOP_HEIGHT + RAIL_HALF_HEIGHT;
+
+    // Compute Y based on obstacle type
+    let obstacleY: number;
+    if (type === 'trolley') {
+      // Match player trolley base height so wheels are visible above rails
+      const BODY_HALF = 1.0 / 2; // DEFAULT_OBSTACLE_CONFIGS.trolley.size.height
+      const WHEEL_HEIGHT = 0.25; // matches trolley wheel height
+      const HOVER_OFFSET_TROLLEY = 0.50; // significantly increased for much better visibility
+      obstacleY = railsTop + HOVER_OFFSET_TROLLEY + BODY_HALF + WHEEL_HEIGHT;
+    } else {
+      // Keep rocks near ground/track surface; small hover to avoid z-fighting
+      const HOVER_OFFSET_ROCK = 0.15;
+      obstacleY = railsTop + HOVER_OFFSET_ROCK;
+    }
+
     return new THREE.Vector3(
       trackPosition.x,
-      trackPosition.y + 0.5, // Slightly above track
+      obstacleY, // Proper hovering height above rails
       segment.startZ + zOffset
     );
   }
@@ -124,14 +161,14 @@ export class ObstacleManager {
    */
   public getObstaclesForSegment(segmentIndex: number): Obstacle[] {
     const obstacles: Obstacle[] = [];
-    
+
     this.obstacles.forEach((obstacle, key) => {
       const [segIdx] = key.split('_').map(Number);
       if (segIdx === segmentIndex) {
         obstacles.push(obstacle);
       }
     });
-    
+
     return obstacles;
   }
 
@@ -156,14 +193,14 @@ export class ObstacleManager {
    */
   public getObstaclesNearPosition(position: THREE.Vector3, maxDistance: number): Obstacle[] {
     const nearbyObstacles: Obstacle[] = [];
-    
+
     this.obstacles.forEach(obstacle => {
       const distance = obstacle.getCenter().distanceTo(position);
       if (distance <= maxDistance) {
         nearbyObstacles.push(obstacle);
       }
     });
-    
+
     return nearbyObstacles;
   }
 
@@ -196,23 +233,23 @@ export class ObstacleManager {
    */
   public removeObstaclesForSegment(segmentIndex: number): void {
     const keysToRemove: string[] = [];
-    
+
     this.obstacles.forEach((obstacle, key) => {
       const [segIdx] = key.split('_').map(Number);
       if (segIdx === segmentIndex) {
         // Remove from scene
         this.scene.remove(obstacle.getGroup());
-        
+
         // Dispose resources
         obstacle.dispose();
-        
+
         keysToRemove.push(key);
       }
     });
-    
+
     // Remove from map
     keysToRemove.forEach(key => this.obstacles.delete(key));
-    
+
     if (keysToRemove.length > 0) {
       this.log(`Removed ${keysToRemove.length} obstacles from segment ${segmentIndex}`);
     }
@@ -223,23 +260,23 @@ export class ObstacleManager {
    */
   public removeObstaclesForSection(sectionIndex: number): void {
     const keysToRemove: string[] = [];
-    
+
     this.obstacles.forEach((obstacle, key) => {
       const [secIdx] = key.split('_').map(Number);
       if (secIdx === sectionIndex) {
         // Remove from scene
         this.scene.remove(obstacle.getGroup());
-        
+
         // Dispose resources
         obstacle.dispose();
-        
+
         keysToRemove.push(key);
       }
     });
-    
+
     // Remove from map
     keysToRemove.forEach(key => this.obstacles.delete(key));
-    
+
     if (keysToRemove.length > 0) {
       this.log(`Removed ${keysToRemove.length} obstacles from section ${sectionIndex}`);
     }
@@ -269,16 +306,16 @@ export class ObstacleManager {
       obstaclesByType: { rock: 0, trolley: 0 } as Record<ObstacleType, number>,
       obstaclesBySegment: {} as Record<number, number>
     };
-    
+
     this.obstacles.forEach((obstacle, key) => {
       // Count by type
       stats.obstaclesByType[obstacle.type]++;
-      
+
       // Count by segment
       const [segmentIndex] = key.split('_').map(Number);
       stats.obstaclesBySegment[segmentIndex] = (stats.obstaclesBySegment[segmentIndex] || 0) + 1;
     });
-    
+
     return stats;
   }
 
@@ -286,22 +323,22 @@ export class ObstacleManager {
    * Create specific obstacle for testing purposes
    */
   public createTestObstacle(
-    segmentIndex: number, 
-    trackIndex: number, 
-    type: ObstacleType, 
+    segmentIndex: number,
+    trackIndex: number,
+    type: ObstacleType,
     position: THREE.Vector3
   ): Obstacle {
     const obstacle = createObstacle(type, position);
-    
+
     // Add to scene
     this.scene.add(obstacle.getGroup());
-    
+
     // Store obstacle
     const key = `${segmentIndex}_${trackIndex}`;
     this.obstacles.set(key, obstacle);
-    
+
     this.log(`Created test ${type} obstacle at segment ${segmentIndex}, track ${trackIndex}`);
-    
+
     return obstacle;
   }
 
@@ -313,7 +350,7 @@ export class ObstacleManager {
       this.scene.remove(obstacle.getGroup());
       obstacle.dispose();
     });
-    
+
     this.obstacles.clear();
     this.log('Cleared all obstacles');
   }

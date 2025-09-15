@@ -102,7 +102,7 @@ export class Menu3D {
   private async loadMinecraftFont(): Promise<void> {
     return new Promise((resolve) => {
       // Create font face
-      const fontFace = new FontFace('Minecraft', 'url(/src/assets/fonts/Minecraft.ttf)');
+      const fontFace = new FontFace('Minecraft', 'url(./assets/fonts/Minecraft.ttf)');
 
       fontFace.load().then((loadedFont) => {
         document.fonts.add(loadedFont);

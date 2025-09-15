@@ -27,11 +27,11 @@ export class Obstacle {
   public readonly position: THREE.Vector3;
   public readonly mesh: THREE.Mesh;
   public readonly boundingBox: THREE.Box3;
-  
+
   private config: ObstacleConfig;
   private group: THREE.Group;
   private isDisposed: boolean = false;
-  
+
   private static nextId: number = 0;
 
   constructor(config: ObstacleConfig) {
@@ -40,27 +40,54 @@ export class Obstacle {
     this.position = config.position.clone ? config.position.clone() : config.position; // Handle mocked objects
     this.config = config;
     this.boundingBox = new THREE.Box3();
-    
+
     // Create group to hold all obstacle parts
     this.group = new THREE.Group();
-    this.group.position.copy(this.position);
     
+    // For trolley obstacles, calculate proper Y position like the player trolley
+    if (this.type === 'trolley') {
+      const adjustedPosition = this.calculateTrolleyPosition(this.position);
+      this.group.position.copy(adjustedPosition);
+    } else {
+      this.group.position.copy(this.position);
+    }
+
     // Create the main mesh based on obstacle type
     this.mesh = this.createObstacleMesh();
     this.group.add(this.mesh);
-    
+
     // Add additional details based on type
     this.addObstacleDetails();
-    
+
     // Calculate bounding box
     this.updateBoundingBox();
-    
+
     // Set user data for identification
     this.group.userData = {
       type: 'obstacle',
       obstacleType: this.type,
       id: this.id
     };
+  }
+
+  /**
+   * Calculate proper position for trolley obstacles to match player trolley positioning
+   */
+  private calculateTrolleyPosition(basePosition: THREE.Vector3): THREE.Vector3 {
+    // Railway track constants (should match Trolley.ts and RailwayTrack.ts)
+    const RAIL_TOP_HEIGHT = 0.25; // tieHeight (0.15) + railHeight/2 (0.1)
+    const RAIL_HALF_HEIGHT = 0.1; // Half of rail height
+    const HOVER_OFFSET = 0.05; // Same as player trolley
+    
+    // Trolley dimensions (from DEFAULT_OBSTACLE_CONFIGS.trolley)
+    const bodyHalf = this.config.size.height / 2;
+    const wheelHeight = 0.25; // Same as player trolley wheel height
+    
+    // Calculate Y position like player trolley
+    const railsTop = RAIL_TOP_HEIGHT + RAIL_HALF_HEIGHT;
+    const calculatedY = railsTop + HOVER_OFFSET + bodyHalf + wheelHeight;
+    
+    return new THREE.Vector3(basePosition.x, calculatedY, basePosition.z);
   }
 
   /**
@@ -87,29 +114,34 @@ export class Obstacle {
   }
 
   /**
-   * Create rock geometry with irregular shape
+   * Create rock geometry with boulder-like irregular shape
    */
   private createRockGeometry(): THREE.BufferGeometry {
-    // Create a basic sphere and then modify it for irregular rock shape
-    const geometry = new THREE.SphereGeometry(
-      Math.max(this.config.size.width, this.config.size.height) / 2,
-      12,
-      8
-    );
+    // Create a larger, more boulder-like base shape
+    const baseRadius = Math.max(this.config.size.width, this.config.size.height) / 1.8;
+    const geometry = new THREE.SphereGeometry(baseRadius, 16, 12);
 
-    // Modify vertices to create irregular rock shape
+    // Modify vertices to create more dramatic boulder-like irregularities
     const positions = geometry.attributes.position;
     const vertex = new THREE.Vector3();
 
     for (let i = 0; i < positions.count; i++) {
       vertex.fromBufferAttribute(positions, i);
-      
-      // Add random variation to create irregular shape
-      const variation = 0.3;
+
+      // Create more dramatic variations for boulder appearance
+      const variation = 0.5; // Increased variation
+      const randomFactor = Math.random();
+
+      // Add some vertices that stick out more (like boulder protrusions)
+      if (randomFactor > 0.7) {
+        vertex.multiplyScalar(1.2 + Math.random() * 0.3);
+      }
+
+      // Add general irregularity
       vertex.x += (Math.random() - 0.5) * variation;
-      vertex.y += (Math.random() - 0.5) * variation;
+      vertex.y += (Math.random() - 0.5) * variation * 0.8; // Less variation on Y to keep it grounded
       vertex.z += (Math.random() - 0.5) * variation;
-      
+
       positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
 
@@ -118,12 +150,12 @@ export class Obstacle {
   }
 
   /**
-   * Create rock material with stone-like appearance
+   * Create rock material with boulder-like stone appearance
    */
   private createRockMaterial(): THREE.Material {
     return new THREE.MeshLambertMaterial({
       color: this.config.colors.primary,
-      flatShading: true, // For angular, cartoonish look
+      flatShading: true, // For angular, boulder-like look
     });
   }
 
@@ -159,137 +191,174 @@ export class Obstacle {
   }
 
   /**
-   * Add details to trolley barrier (wheels, windows, etc.)
-   * Enhanced version for barrier trolleys - no smoke, no flickering lights, great windows
+   * Add details to trolley barrier - matches current trolley model but without smoke/flickering
+   * Uses blocky wheels like the main trolley, grey windows, no smoke, random light state
    */
   private addTrolleyBarrierDetails(): void {
-    // Add wheels to the trolley barrier
-    const wheelGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 8);
+    // Add blocky wheels matching the main trolley design
+    const wheelGeometry = new THREE.BoxGeometry(0.3, 0.25, 0.2); // Same as main trolley
     const wheelMaterial = new THREE.MeshLambertMaterial({
-      color: 0x333333 // Dark gray
+      color: 0x000000 // Black wheels like main trolley
     });
 
-    // Front wheels
-    const frontLeftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    frontLeftWheel.position.set(-this.config.size.width / 2 - 0.1, -this.config.size.height / 2, this.config.size.length / 3);
-    frontLeftWheel.rotation.z = Math.PI / 2;
-    this.group.add(frontLeftWheel);
+  // Calculate wheel positions - place wheels fully under the body like player trolley
+  const wheelY = -this.config.size.height / 2 - 0.25 / 2; // body bottom minus half wheel height
+  const wheelOffsetZ = this.config.size.length * 0.35;
+  const halfWidth = this.config.size.width / 2 - 0.3 / 2 + 0.001; // align wheels flush with body sides
 
-    const frontRightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    frontRightWheel.position.set(this.config.size.width / 2 + 0.1, -this.config.size.height / 2, this.config.size.length / 3);
-    frontRightWheel.rotation.z = Math.PI / 2;
-    this.group.add(frontRightWheel);
+    // Create 4 wheels positioned like main trolley
+    const wheelPositions = [
+      new THREE.Vector3(-halfWidth, wheelY, wheelOffsetZ),   // front left
+      new THREE.Vector3(-halfWidth, wheelY, -wheelOffsetZ),  // back left
+      new THREE.Vector3(halfWidth, wheelY, wheelOffsetZ),    // front right
+      new THREE.Vector3(halfWidth, wheelY, -wheelOffsetZ)    // back right
+    ];
 
-    // Back wheels
-    const backLeftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    backLeftWheel.position.set(-this.config.size.width / 2 - 0.1, -this.config.size.height / 2, -this.config.size.length / 3);
-    backLeftWheel.rotation.z = Math.PI / 2;
-    this.group.add(backLeftWheel);
+    wheelPositions.forEach((pos, i) => {
+      const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheel.position.copy(pos);
+      wheel.castShadow = true;
+      wheel.name = `BarrierWheel${i}`;
+      this.group.add(wheel);
+    });
 
-    const backRightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    backRightWheel.position.set(this.config.size.width / 2 + 0.1, -this.config.size.height / 2, -this.config.size.length / 3);
-    backRightWheel.rotation.z = Math.PI / 2;
-    this.group.add(backRightWheel);
+    // Add roof like main trolley
+    this.addTrolleyRoof();
 
-    // Add great windows (clear, non-flickering)
+    // Add grey windows (no reflections for barriers)
     this.addTrolleyWindows();
 
     // Add chimney (no smoke for barrier trolleys)
     this.addTrolleyChimney();
 
-    // Add steady headlight (no flickering for barrier trolleys)
-    this.addTrolleyHeadlight();
-
-    // Add warning stripes if secondary color is provided
-    if (this.config.colors.secondary) {
-      const stripeGeometry = new THREE.BoxGeometry(
-        this.config.size.width + 0.02,
-        0.05,
-        this.config.size.length + 0.02
-      );
-      const stripeMaterial = new THREE.MeshLambertMaterial({
-        color: this.config.colors.secondary
-      });
-
-      const stripe1 = new THREE.Mesh(stripeGeometry, stripeMaterial);
-      stripe1.position.y = this.config.size.height / 4;
-      this.group.add(stripe1);
-
-      const stripe2 = new THREE.Mesh(stripeGeometry, stripeMaterial);
-      stripe2.position.y = -this.config.size.height / 4;
-      this.group.add(stripe2);
-    }
+    // Add random light state (on or off, no flickering)
+    this.addTrolleyLight();
   }
 
   /**
-   * Add clear, great-looking windows to trolley barrier
+   * Add roof to trolley barrier (matches main trolley)
    */
-  private addTrolleyWindows(): void {
-    const windowGeometry = new THREE.BoxGeometry(
-      this.config.size.width * 0.8,
-      this.config.size.height * 0.4,
-      0.02
+  private addTrolleyRoof(): void {
+    const roofGeometry = new THREE.BoxGeometry(
+      this.config.size.width + 0.1,
+      0.2,
+      this.config.size.length + 0.1
     );
-    
-    const windowMaterial = new THREE.MeshLambertMaterial({
-      color: 0x87CEEB, // Sky blue - clear windows
-      transparent: true,
-      opacity: 0.8
+
+    const roofMaterial = new THREE.MeshLambertMaterial({
+      color: 0x2E86AB // Blue roof like main trolley
     });
 
-    // Front window
-    const frontWindow = new THREE.Mesh(windowGeometry, windowMaterial);
-    frontWindow.position.set(0, this.config.size.height * 0.1, this.config.size.length / 2 + 0.01);
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.position.y = this.config.size.height / 2 + 0.1;
+    roof.castShadow = true;
+    roof.name = 'BarrierRoof';
+
+    this.group.add(roof);
+  }
+
+  /**
+   * Add grey windows to trolley barrier (matches main trolley style but grey)
+   */
+  private addTrolleyWindows(): void {
+    // Grey windows for barrier trolleys
+    const windowMaterial = new THREE.MeshLambertMaterial({
+      color: 0x808080, // Grey windows
+      transparent: true,
+      opacity: 0.7
+    });
+
+    // Front windshield
+    const frontWindowGeometry = new THREE.PlaneGeometry(0.9, 0.7);
+    const frontWindow = new THREE.Mesh(frontWindowGeometry, windowMaterial);
+    frontWindow.position.set(0, 0.15, this.config.size.length / 2 + 0.01);
+    frontWindow.name = 'BarrierFrontWindow';
     this.group.add(frontWindow);
 
     // Back window
-    const backWindow = new THREE.Mesh(windowGeometry, windowMaterial);
-    backWindow.position.set(0, this.config.size.height * 0.1, -this.config.size.length / 2 - 0.01);
+    const backWindow = new THREE.Mesh(frontWindowGeometry, windowMaterial);
+    backWindow.position.set(0, 0.15, -this.config.size.length / 2 - 0.01);
+    backWindow.rotation.y = Math.PI;
+    backWindow.name = 'BarrierBackWindow';
     this.group.add(backWindow);
 
-    // Side windows
-    const sideWindowGeometry = new THREE.BoxGeometry(
-      0.02,
-      this.config.size.height * 0.3,
-      this.config.size.length * 0.6
-    );
+    // Side windows (multiple smaller windows for more detail)
+    const sideWindowGeometry = new THREE.PlaneGeometry(0.6, 0.5);
 
-    const leftWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
-    leftWindow.position.set(-this.config.size.width / 2 - 0.01, this.config.size.height * 0.1, 0);
-    this.group.add(leftWindow);
+    // Left side windows
+    const leftWindow1 = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+    leftWindow1.position.set(-this.config.size.width / 2 - 0.01, 0.15, 0.4);
+    leftWindow1.rotation.y = Math.PI / 2;
+    leftWindow1.name = 'BarrierLeftWindow1';
+    this.group.add(leftWindow1);
 
-    const rightWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
-    rightWindow.position.set(this.config.size.width / 2 + 0.01, this.config.size.height * 0.1, 0);
-    this.group.add(rightWindow);
+    const leftWindow2 = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+    leftWindow2.position.set(-this.config.size.width / 2 - 0.01, 0.15, -0.4);
+    leftWindow2.rotation.y = Math.PI / 2;
+    leftWindow2.name = 'BarrierLeftWindow2';
+    this.group.add(leftWindow2);
+
+    // Right side windows
+    const rightWindow1 = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+    rightWindow1.position.set(this.config.size.width / 2 + 0.01, 0.15, 0.4);
+    rightWindow1.rotation.y = -Math.PI / 2;
+    rightWindow1.name = 'BarrierRightWindow1';
+    this.group.add(rightWindow1);
+
+    const rightWindow2 = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+    rightWindow2.position.set(this.config.size.width / 2 + 0.01, 0.15, -0.4);
+    rightWindow2.rotation.y = -Math.PI / 2;
+    rightWindow2.name = 'BarrierRightWindow2';
+    this.group.add(rightWindow2);
   }
 
   /**
-   * Add chimney to trolley barrier (no smoke)
+   * Add chimney to trolley barrier (blocky design, no smoke)
    */
   private addTrolleyChimney(): void {
-    const chimneyGeometry = new THREE.CylinderGeometry(0.08, 0.1, 0.3, 8);
+    const chimneyGeometry = new THREE.BoxGeometry(0.2, 0.4, 0.2); // Blocky like main trolley
     const chimneyMaterial = new THREE.MeshLambertMaterial({
-      color: 0x333333 // Dark gray
+      color: 0x444444 // Dark gray like main trolley
     });
 
     const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
-    chimney.position.set(0, this.config.size.height / 2 + 0.15, this.config.size.length * 0.2);
+    chimney.position.set(
+      0,
+      this.config.size.height / 2 + 0.2 + 0.1, // height/2 + chimney height/2 + roof offset
+      this.config.size.length / 3
+    );
+    chimney.castShadow = true;
+    chimney.name = 'BarrierChimney';
     this.group.add(chimney);
   }
 
   /**
-   * Add steady headlight to trolley barrier (no flickering)
+   * Add decorative headlight to trolley barrier (no real light)
+   *
+   * Note: We intentionally do NOT add a real PointLight here to avoid
+   * circular lighting artifacts on the ground under/around the trolley.
    */
-  private addTrolleyHeadlight(): void {
-    const lightGeometry = new THREE.SphereGeometry(0.06, 8, 6);
-    const lightMaterial = new THREE.MeshLambertMaterial({
-      color: 0xFFFFAA, // Steady warm white light
-      emissive: 0x444422 // Slight glow
+  private addTrolleyLight(): void {
+    const lightGeometry = new THREE.SphereGeometry(0.06, 12, 12);
+
+    // Randomly decide if decorative headlight should appear "on"
+    const isLightOn = Math.random() > 0.5;
+    const lightMaterial = new THREE.MeshStandardMaterial({
+      color: isLightOn ? 0xFFD966 : 0x333333,
+      emissive: isLightOn ? 0xFFD966 : 0x000000,
+      emissiveIntensity: isLightOn ? 0.7 : 0.0,
+      metalness: 0.2,
+      roughness: 0.3
     });
 
-    const headlight = new THREE.Mesh(lightGeometry, lightMaterial);
-    headlight.position.set(0, this.config.size.height * 0.1, this.config.size.length / 2 + 0.05);
-    this.group.add(headlight);
+    const light = new THREE.Mesh(lightGeometry, lightMaterial);
+    light.position.set(
+      0,
+      this.config.size.height / 2 + 0.24,
+      -this.config.size.length / 4
+    );
+    light.name = 'BarrierLight';
+    this.group.add(light);
   }
 
   /**
@@ -298,7 +367,7 @@ export class Obstacle {
   private addRockDetails(): void {
     // Add small debris around the rock
     const debrisCount = Math.floor(Math.random() * 3) + 2; // 2-4 debris pieces
-    
+
     for (let i = 0; i < debrisCount; i++) {
       const debrisSize = Math.random() * 0.1 + 0.05; // 0.05 to 0.15
       const debrisGeometry = new THREE.SphereGeometry(debrisSize, 6, 4);
@@ -308,7 +377,7 @@ export class Obstacle {
       });
 
       const debris = new THREE.Mesh(debrisGeometry, debrisMaterial);
-      
+
       // Position debris randomly around the main rock
       const angle = (i / debrisCount) * Math.PI * 2;
       const distance = this.config.size.width / 2 + Math.random() * 0.3;
@@ -317,7 +386,7 @@ export class Obstacle {
         -this.config.size.height / 2,
         Math.sin(angle) * distance
       );
-      
+
       this.group.add(debris);
     }
   }
@@ -371,7 +440,15 @@ export class Obstacle {
    */
   public setPosition(newPosition: THREE.Vector3): void {
     this.position.copy(newPosition);
-    this.group.position.copy(this.position);
+    
+    // For trolley obstacles, calculate proper Y position like the player trolley
+    if (this.type === 'trolley') {
+      const adjustedPosition = this.calculateTrolleyPosition(newPosition);
+      this.group.position.copy(adjustedPosition);
+    } else {
+      this.group.position.copy(newPosition);
+    }
+    
     this.updateBoundingBox();
   }
 
@@ -434,35 +511,44 @@ export class Obstacle {
 export const DEFAULT_OBSTACLE_CONFIGS = {
   rock: {
     size: {
-      width: 1.0,
-      height: 0.8,
-      length: 1.0
+      width: 1.2,  // Larger boulder size
+      height: 1.0, // Taller boulder
+      length: 1.2  // Larger boulder size
     },
     colors: {
-      primary: 0x8B7355 // Brown/tan rock color
+      primary: 0x8B7355 // More realistic boulder color (brownish-grey)
     }
   },
   trolley: {
     size: {
-      width: 1.2,
-      height: 0.6,
-      length: 1.8
+      width: 1.4,  // Match main trolley size
+      height: 1.0, // Match main trolley size
+      length: 2.4  // Match main trolley size
     },
     colors: {
-      primary: 0xFF4444, // Bright red for danger
-      secondary: 0xFFFF00 // Yellow warning stripes
+      primary: 0xFF6B35 // Default orange, will be overridden by random colors
     }
   }
 } as const;
 
 /**
+ * Trolley barrier color options (blue, green, yellow, orange)
+ */
+export const TROLLEY_BARRIER_COLORS = [
+  0x2E86AB, // Blue
+  0x32CD32, // Green  
+  0xFFD700, // Yellow
+  0xFF6B35  // Orange
+] as const;
+
+/**
  * Factory function to create obstacles with random type selection
- * Requirement 6.2: Random obstacle type selection
+ * Only creates rocks and trolley barriers (no buffers)
  */
 export function createRandomObstacle(position: THREE.Vector3): Obstacle {
   const obstacleTypes: ObstacleType[] = ['rock', 'trolley'];
   const randomType = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
-  
+
   return createObstacle(randomType, position);
 }
 
@@ -471,14 +557,20 @@ export function createRandomObstacle(position: THREE.Vector3): Obstacle {
  */
 export function createObstacle(type: ObstacleType, position: THREE.Vector3, customConfig?: Partial<ObstacleConfig>): Obstacle {
   const baseConfig = DEFAULT_OBSTACLE_CONFIGS[type];
-  
+
   const config: ObstacleConfig = {
     type,
     position: position.clone ? position.clone() : position, // Handle mocked objects
     size: { ...baseConfig.size },
     colors: { ...baseConfig.colors }
   };
-  
+
+  // For trolley barriers, randomly select from available colors
+  if (type === 'trolley') {
+    const randomColor = TROLLEY_BARRIER_COLORS[Math.floor(Math.random() * TROLLEY_BARRIER_COLORS.length)];
+    config.colors.primary = randomColor;
+  }
+
   // Apply custom config if provided, but don't override position
   if (customConfig) {
     if (customConfig.size) {
@@ -488,6 +580,6 @@ export function createObstacle(type: ObstacleType, position: THREE.Vector3, cust
       config.colors = { ...config.colors, ...customConfig.colors };
     }
   }
-  
+
   return new Obstacle(config);
 }

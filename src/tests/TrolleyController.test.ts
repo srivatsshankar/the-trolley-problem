@@ -77,11 +77,11 @@ describe('TrolleyController', () => {
         width: 2.0,
         segmentLength: 25.0,
       },
-      trolley: {
-        baseSpeed: 5.0,
+  trolley: {
+    baseSpeed: 7.0,
   speedIncrease: 0.0103, // 1.03% increase per segment
-        maxSpeedMultiplier: 5.0,
-      },
+    maxSpeedMultiplier: 5.0,
+  },
       difficulty: {
         minPeoplePerTrack: 1,
         maxPeoplePerTrack: 5,
@@ -93,6 +93,9 @@ describe('TrolleyController', () => {
       rendering: {
         viewDistance: 50.0,
         maxVisibleSegments: 10,
+        minSectionsInView: 3.5,
+        previewSectionsAhead: 2.5,
+        cameraFrustumSize: 60
       },
       scoring: {
         pointsPerPersonAvoided: 1,
@@ -199,6 +202,47 @@ describe('TrolleyController', () => {
       
   expect(trolleyController.getSpeedMultiplier()).toBeLessThanOrEqual(5.0);
   expect(trolleyController.getSpeedMultiplier()).toBeCloseTo(5.0, 2);
+    });
+
+    it('should increase speed by 10% per section', () => {
+      const initialSpeed = trolleyController.speed;
+      
+      trolleyController.increaseSectionSpeed();
+      expect(trolleyController.speed).toBeCloseTo(initialSpeed * 1.10, 5);
+      expect(trolleyController.sectionsPassed).toBe(1);
+      
+      trolleyController.increaseSectionSpeed();
+      expect(trolleyController.speed).toBeCloseTo(initialSpeed * Math.pow(1.10, 2), 5);
+      expect(trolleyController.sectionsPassed).toBe(2);
+      
+      // Test that it caps at 5x base speed
+      for (let i = 0; i < 50; i++) {
+        trolleyController.increaseSectionSpeed();
+      }
+      expect(trolleyController.getSpeedMultiplier()).toBeLessThanOrEqual(5.0);
+      expect(trolleyController.getSpeedMultiplier()).toBeCloseTo(5.0, 2);
+    });
+
+    it('should automatically increase speed when crossing section boundaries', () => {
+      const initialSpeed = trolleyController.speed;
+      const sectionLength = mockConfig.tracks.segmentLength * 2.5;
+      
+      // Move trolley to just before first section boundary
+      trolleyController.setPosition(new THREE.Vector3(0, 0, sectionLength - 1));
+      trolleyController.update(0.016);
+      expect(trolleyController.speed).toBe(initialSpeed); // No change yet
+      
+      // Move trolley past first section boundary
+      trolleyController.setPosition(new THREE.Vector3(0, 0, sectionLength + 1));
+      trolleyController.update(0.016);
+      expect(trolleyController.speed).toBeCloseTo(initialSpeed * 1.10, 5); // 10% increase
+      expect(trolleyController.sectionsPassed).toBe(1);
+      
+      // Move to second section boundary
+      trolleyController.setPosition(new THREE.Vector3(0, 0, sectionLength * 2 + 1));
+      trolleyController.update(0.016);
+      expect(trolleyController.speed).toBeCloseTo(initialSpeed * Math.pow(1.10, 2), 5); // 21% total increase
+      expect(trolleyController.sectionsPassed).toBe(2);
     });
 
     it('should detect high-speed threshold correctly', () => {

@@ -48,7 +48,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     segmentLength: 25.0 // Increased by 2.5x for smoother gameplay
   },
   trolley: {
-    baseSpeed: 5.0,
+    baseSpeed: 7.0,
   speedIncrease: 0.0103, // 1.03% increase per segment (Requirement 7.1)
     maxSpeedMultiplier: 5.0 // 5x base speed threshold (Requirement 7.4)
   },
@@ -61,14 +61,14 @@ export const DEFAULT_CONFIG: GameConfig = {
     highSpeedMaxBarriers: 4
   },
   rendering: {
-    viewDistance: 150.0, // Increased for longer segments
-    maxVisibleSegments: 8, // Fewer segments needed due to increased length
+    viewDistance: 250.0, // Increased but more reasonable for performance
+    maxVisibleSegments: 12, // Increased but balanced
     /** Minimum number of sections that should be visible on screen at all times */
-    minSectionsInView: 2.5, // Show at least 2.5 sections for better gameplay
+    minSectionsInView: 3.5, // Good visibility without being excessive
     /** Number of sections to preload content ahead of the player */
-    previewSectionsAhead: 1.5, // Preload content 1.5 sections ahead
+    previewSectionsAhead: 2.5, // Adequate preloading
     /** Camera frustum size for orthographic camera */
-    cameraFrustumSize: 65 // Increased from 35 to show more content
+    cameraFrustumSize: 60 // Balanced size for good visibility without menu issues
   },
   scoring: {
     pointsPerPersonAvoided: 1,

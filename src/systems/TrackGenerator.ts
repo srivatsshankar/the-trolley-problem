@@ -69,8 +69,8 @@ export class TrackGenerator {
   public initialize(): void {
     this.log('Generating initial track segments...');
     
-    // Generate more initial segments to create a buffer
-    const initialSegmentCount = this.generationConfig.maxVisibleSegments + 5; // Extra buffer
+    // Generate more initial segments to create a larger buffer for better visibility
+    const initialSegmentCount = this.generationConfig.maxVisibleSegments + 8; // Good buffer for extended view
     for (let i = 0; i < initialSegmentCount; i++) {
       this.generateSegment(i);
     }
@@ -290,19 +290,19 @@ export class TrackGenerator {
     // Convert sections to segments (1 section = 2.5 segments based on game design)
     const segmentsAhead = Math.ceil(sectionsAhead * 2.5);
     
-    // Generate ahead segments with buffer zone
-    // Start generating when 60% through current segment to avoid pauses
+    // Generate ahead segments with good buffer zone for visibility
+    // Start generating when 60% through current segment to ensure content is ready
     const bufferZoneThreshold = 0.6;
-    const baseGenerateAhead = Math.max(segmentsAhead, Math.ceil(this.generationConfig.maxVisibleSegments / 2));
+    const baseGenerateAhead = Math.max(segmentsAhead, Math.ceil(this.generationConfig.maxVisibleSegments * 0.8));
     
     // Add extra lookahead when approaching segment boundary
-    const extraLookahead = segmentProgress > bufferZoneThreshold ? 2 : 0;
+    const extraLookahead = segmentProgress > bufferZoneThreshold ? 3 : 1; // Reasonable lookahead
     const generateAhead = baseGenerateAhead + extraLookahead;
     
     const maxSegmentToGenerate = currentSegment + generateAhead;
     
-    // Generate segments in batches to spread load across frames
-    const maxGenerationsPerFrame = 2;
+    // Generate segments in batches to spread load across frames - balanced for performance
+    const maxGenerationsPerFrame = 3;
     let generationsThisFrame = 0;
     
     for (let i = this.lastGeneratedSegment + 1; i <= maxSegmentToGenerate && generationsThisFrame < maxGenerationsPerFrame; i++) {

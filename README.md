@@ -35,6 +35,10 @@ A 3D browser-based trolley problem game built with Three.js that challenges play
    npm run build
    ```
 
+   This will:
+   - Copy `src/assets` (or `assets` if present) into `dist/assets`
+   - Create a dated zip archive of the `dist` contents in `builds/` named like `YYYY-MM-DD trolley-problem.zip`, with `index.html` at the root of the archive
+
 4. Run tests:
    ```bash
    npm test

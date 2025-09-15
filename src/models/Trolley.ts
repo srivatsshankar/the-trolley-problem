@@ -40,7 +40,7 @@ export class Trolley {
   private chimney!: THREE.Mesh;
   private smokeParticles: THREE.Points[] = [];
   private topLightMesh?: THREE.Mesh;
-  private topPointLight?: THREE.PointLight;
+  // No real PointLight on trolley to avoid ground lighting artifacts
   private config: TrolleyConfig;
   
   // Railway track constants (should match RailwayTrack.ts DEFAULT_RAILWAY_CONFIG)
@@ -402,12 +402,8 @@ export class Trolley {
     this.group.add(topLight);
     this.topLightMesh = topLight;
 
-    // Optional: point light for subtle scene lighting feedback
-    const point = new THREE.PointLight(0xFFE680, 0, 3);
-    point.position.copy(topLight.position);
-    point.castShadow = false;
-    this.group.add(point);
-    this.topPointLight = point;
+    // Intentionally do NOT add a real PointLight here.
+    // The emissive mesh provides the visual without lighting the ground.
   }
   
   /**
@@ -453,9 +449,7 @@ export class Trolley {
       const mat = this.topLightMesh.material as THREE.MeshStandardMaterial;
       mat.emissiveIntensity = intensity;
     }
-    if (this.topPointLight) {
-      this.topPointLight.intensity = intensity * 0.8;
-    }
+    // No real PointLight intensity updates; keep lighting purely emissive.
 
     // Update smoke animation
     this.updateSmoke(deltaTime);

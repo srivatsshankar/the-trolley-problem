@@ -34,6 +34,8 @@ export class TrolleyController {
   private transitionEndZ: number = 0;
   private _segmentsPassed: number;
   private _lastSpeedSegmentIndex: number;
+  private _sectionsPassed: number;
+  private _lastSpeedSectionIndex: number;
   private _rockingBoostEnabled: boolean = false;
   
   private config: GameConfig;
@@ -62,6 +64,10 @@ export class TrolleyController {
     this._segmentsPassed = 0;
   // Initialize last segment index for speed progression
   this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
+    this._sectionsPassed = 0;
+    // Initialize last section index for speed progression (sections are 2.5x segment length)
+    const sectionLength = this.config.tracks.segmentLength * 2.5;
+    this._lastSpeedSectionIndex = Math.floor(this._position.z / sectionLength);
     
     // Initialize collision detection system
     this.collisionDetection = createCollisionDetection({
@@ -124,26 +130,35 @@ export class TrolleyController {
       this.collisionDetection.updateTrolleyBoundingBox(this.trolley);
     }
 
-    // Auto-increase speed when crossing segment boundaries
+    // Auto-increase speed when crossing section boundaries
     this.updateSpeedProgression();
   }
 
   /**
-   * Detect segment boundary crossing and increase speed accordingly
+   * Detect section boundary crossing and increase speed accordingly
+   * Sections are 2.5x segment length, speed increases 5% per section
    */
   private updateSpeedProgression(): void {
     const segLen = this.config.tracks.segmentLength;
     if (segLen <= 0) return;
 
+    // Update segment tracking (for compatibility)
     const currentSegmentIndex = Math.floor(this._position.z / segLen);
     if (currentSegmentIndex > this._lastSpeedSegmentIndex) {
-      // For each newly entered segment (skip negatives), apply speed increase
-      for (let i = this._lastSpeedSegmentIndex + 1; i <= currentSegmentIndex; i++) {
+      this._lastSpeedSegmentIndex = currentSegmentIndex;
+    }
+
+    // Update section tracking and speed progression
+    const sectionLength = segLen * 2.5;
+    const currentSectionIndex = Math.floor(this._position.z / sectionLength);
+    if (currentSectionIndex > this._lastSpeedSectionIndex) {
+      // For each newly entered section (skip negatives), apply speed increase
+      for (let i = this._lastSpeedSectionIndex + 1; i <= currentSectionIndex; i++) {
         if (i >= 0) {
-          this.increaseSpeed();
+          this.increaseSectionSpeed();
         }
       }
-      this._lastSpeedSegmentIndex = currentSegmentIndex;
+      this._lastSpeedSectionIndex = currentSectionIndex;
     }
   }
   
@@ -156,7 +171,7 @@ export class TrolleyController {
     // If we have a curve, drive X (and optional Y) from the curve based on Z progress
     if (this.transitionCurve) {
       const denom = Math.max(1e-6, this.transitionEndZ - this.transitionStartZ);
-      const linearT = THREE.MathUtils.clamp((this._position.z - this.transitionStartZ) / denom, 0, 1);
+      const linearT = Math.max(0, Math.min(1, (this._position.z - this.transitionStartZ) / denom));
       // Keep external progress for potential UI/debug
       this._transitionProgress = linearT;
       const t = this.smoothStep(linearT);
@@ -252,7 +267,29 @@ export class TrolleyController {
   }
   
   /**
-  * Increase speed by configured percentage per segment
+   * Increase speed by 10% per section (updated requirement)
+   * Trolley gets 10% faster after every section, capped at 5x base speed
+   */
+  public increaseSectionSpeed(): void {
+    this._sectionsPassed++;
+    // 10% increase per section: 1.10^sections, capped at 5x base speed
+    const rawMultiplier = Math.pow(1.10, this._sectionsPassed);
+    const clampedMultiplier = Math.min(this.config.trolley.maxSpeedMultiplier, rawMultiplier);
+    this._speed = this._baseSpeed * clampedMultiplier;
+    
+    // Enable slight rocking boost starting at the 3rd section (since sections are longer)
+    if (!this._rockingBoostEnabled && this._sectionsPassed >= 3) {
+      this._rockingBoostEnabled = true;
+      if (this.trolley && typeof this.trolley.setRockingBoost === 'function') {
+        this.trolley.setRockingBoost(true);
+      }
+    }
+    
+    console.log(`Speed increased to ${this._speed.toFixed(2)} (${(this._speed/this._baseSpeed).toFixed(2)}x base) after ${this._sectionsPassed} sections`);
+  }
+
+  /**
+  * Increase speed by configured percentage per segment (legacy method for compatibility)
   * Requirement 7.1: Speed increase per segment (configurable %)
    */
   public increaseSpeed(): void {
@@ -263,7 +300,7 @@ export class TrolleyController {
    // Enable slight rocking boost starting at the 5th segment
    if (!this._rockingBoostEnabled && this._segmentsPassed >= 5) {
      this._rockingBoostEnabled = true;
-     if (this.trolley) {
+     if (this.trolley && typeof this.trolley.setRockingBoost === 'function') {
        this.trolley.setRockingBoost(true);
      }
    }
@@ -328,7 +365,9 @@ export class TrolleyController {
     this.trolley = createTrolley();
     this.trolley.setPosition(this._position);
     // Apply any milestone-based visual states (e.g., rocking boost)
-    this.trolley.setRockingBoost(this._rockingBoostEnabled);
+    if (typeof this.trolley.setRockingBoost === 'function') {
+      this.trolley.setRockingBoost(this._rockingBoostEnabled);
+    }
     return this.trolley;
   }
   
@@ -372,6 +411,9 @@ export class TrolleyController {
     this._transitionProgress = 0;
     this._segmentsPassed = 0;
   this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
+    this._sectionsPassed = 0;
+    const sectionLength = this.config.tracks.segmentLength * 2.5;
+    this._lastSpeedSectionIndex = Math.floor(this._position.z / sectionLength);
     this._rockingBoostEnabled = false;
     
   // Set X position to current track
@@ -383,8 +425,12 @@ export class TrolleyController {
     
     if (this.trolley) {
       this.trolley.setPosition(this._position);
-      this.trolley.setRockingBoost(false);
-      this.trolley.showDirectionIndicator('none');
+      if (typeof this.trolley.setRockingBoost === 'function') {
+        this.trolley.setRockingBoost(false);
+      }
+      if (typeof this.trolley.showDirectionIndicator === 'function') {
+        this.trolley.showDirectionIndicator('none');
+      }
     }
   }
   
@@ -429,6 +475,13 @@ export class TrolleyController {
   public get segmentsPassed(): number {
     return this._segmentsPassed;
   }
+
+  /**
+   * Get number of sections passed
+   */
+  public get sectionsPassed(): number {
+    return this._sectionsPassed;
+  }
   
   /**
    * Check if trolley is currently transitioning between tracks
@@ -472,8 +525,10 @@ export class TrolleyController {
     if (this.trolley) {
       this.trolley.setPosition(this._position);
     }
-  // Recompute last segment index so speed progression remains correct
+  // Recompute last segment and section indices so speed progression remains correct
   this._lastSpeedSegmentIndex = Math.floor(this._position.z / this.config.tracks.segmentLength);
+    const sectionLength = this.config.tracks.segmentLength * 2.5;
+    this._lastSpeedSectionIndex = Math.floor(this._position.z / sectionLength);
   }
   
   /**

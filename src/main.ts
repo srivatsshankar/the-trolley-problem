@@ -19,14 +19,17 @@ import { VisualEffectsSystem } from './systems/VisualEffectsSystem';
 
 console.log('Trolley Problem Game - Starting with menu system...');
 
-// Get canvas element
-const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
-if (!canvas) {
-    throw new Error('Game canvas not found');
+// Lazily resolve the canvas after DOM is ready to work in all hosts (e.g., itch.io iframe)
+let canvas: HTMLCanvasElement | null = null;
+function getCanvas(): HTMLCanvasElement {
+    if (canvas && canvas.isConnected) return canvas;
+    const el = document.getElementById('gameCanvas') as HTMLCanvasElement | null;
+    if (!el) throw new Error('Game canvas not found');
+    canvas = el;
+    // Canvas is always visible since we use Three.js for both menu and game
+    canvas.style.display = 'block';
+    return canvas;
 }
-
-// Canvas is always visible since we use Three.js for both menu and game
-canvas.style.display = 'block';
 
 // Menu system
 let menuManager: MenuManager;
@@ -62,25 +65,25 @@ function initializeThreeJS(): void {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Sky blue
         
-        // Create isometric camera with increased frustum size for mobile visibility
+        // Create isometric camera with menu-appropriate frustum size initially
         const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = 35; // Increased from 20 for better mobile experience
+        const menuFrustumSize = 35; // Original size for menu compatibility
         camera = new THREE.OrthographicCamera(
-            frustumSize * aspect / -2,
-            frustumSize * aspect / 2,
-            frustumSize / 2,
-            frustumSize / -2,
+            menuFrustumSize * aspect / -2,
+            menuFrustumSize * aspect / 2,
+            menuFrustumSize / 2,
+            menuFrustumSize / -2,
             0.1,
             1000
         );
         
-        // Position camera for isometric view - adjusted for larger frustum
-        camera.position.set(20, 20, 20); // Increased from (15, 15, 15)
+        // Position camera for menu view initially
+        camera.position.set(20, 20, 20); // Original menu position
         camera.lookAt(0, 0, 0);
         
         // Create renderer
         renderer = new THREE.WebGLRenderer({
-            canvas: canvas,
+            canvas: getCanvas(),
             antialias: true
         });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -106,8 +109,12 @@ function initializeGame(): void {
         
         // Three.js is already initialized, just add game objects
         
-    // Create infinite tiling ground underneath tracks
-    groundSystem = new GroundSystem(scene, { tileSize: 200, gridHalfExtent: 1, color: 0x90EE90 });
+    // Create infinite tiling ground underneath tracks with larger coverage
+    groundSystem = new GroundSystem(scene, { 
+        tileSize: 150, 
+        gridHalfExtent: 4, // Much larger grid (9x9 tiles) to prevent blue bars
+        color: 0x90EE90 
+    });
     groundSystem.initialize(new THREE.Vector3(0, 0, 0));
         
         // Initialize track generator with proper single-to-multiple track system
@@ -141,14 +148,14 @@ function initializeGame(): void {
     // Small positive z ensures we're clearly on the first segment
     trolleyController.setPosition(new THREE.Vector3(0, 0, 2));
         
-        // Initialize camera controller
+        // Initialize camera controller with balanced settings for good visibility
         cameraController = new CameraController(camera, {
-            followDistance: 15,  // Match original Z offset
-            followHeight: 15,    // Match original Y offset
-            followOffset: 15,    // Match original X offset
+            followDistance: 30,  // Good distance to show track ahead
+            followHeight: 25,    // Balanced height for overview
+            followOffset: 15,    // Good side offset for perspective
             smoothness: 0.05,    // Smoother following
             lookAtTarget: false, // Don't change rotation for isometric view
-            minFollowDistance: 0.5
+            minFollowDistance: 2
         });
         
         // Don't set camera target immediately - wait for trolley to start moving
@@ -415,10 +422,51 @@ function showError(message: string): void {
 }
 
 // Handle window resize
+/**
+ * Switch camera configuration for game mode
+ */
+function switchToGameCamera(): void {
+    if (!camera) return;
+    
+    const aspect = window.innerWidth / window.innerHeight;
+    const gameFrustumSize = 60; // Balanced size - larger than menu but not too large
+    
+    camera.left = gameFrustumSize * aspect / -2;
+    camera.right = gameFrustumSize * aspect / 2;
+    camera.top = gameFrustumSize / 2;
+    camera.bottom = gameFrustumSize / -2;
+    camera.updateProjectionMatrix();
+    
+    console.log('Switched to game camera with frustum size:', gameFrustumSize);
+}
+
+/**
+ * Switch camera configuration for menu mode
+ */
+function switchToMenuCamera(): void {
+    if (!camera) return;
+    
+    const aspect = window.innerWidth / window.innerHeight;
+    const menuFrustumSize = 35; // Original menu size
+    
+    camera.left = menuFrustumSize * aspect / -2;
+    camera.right = menuFrustumSize * aspect / 2;
+    camera.top = menuFrustumSize / 2;
+    camera.bottom = menuFrustumSize / -2;
+    camera.updateProjectionMatrix();
+    
+    // Reset camera position for menu
+    camera.position.set(20, 20, 20);
+    camera.lookAt(0, 0, 0);
+    
+    console.log('Switched to menu camera with frustum size:', menuFrustumSize);
+}
+
 window.addEventListener('resize', () => {
     if (camera && renderer) {
         const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = 35; // Updated to match the increased camera frustum
+        // Use appropriate frustum size based on current mode
+        const frustumSize = gameStarted ? 60 : 35;
         camera.left = frustumSize * aspect / -2;
         camera.right = frustumSize * aspect / 2;
         camera.updateProjectionMatrix();
@@ -434,7 +482,10 @@ window.addEventListener('keydown', (event) => {
             console.log('Returning to main menu...');
             gameStarted = false;
             
-            // Reset camera to original position
+            // Switch back to menu camera
+            switchToMenuCamera();
+            
+            // Reset camera controller
             if (cameraController) {
                 cameraController.resetCamera();
             }
@@ -504,9 +555,16 @@ function startGame(): void {
     gameStarted = true;
     console.log('Starting game...');
     
+    // Switch to game camera configuration
+    switchToGameCamera();
+    
     // Initialize the game objects
     initializeGame();
 }
 
-// Start with the menu system
-startMenuSystem();
+// Start after DOM is ready to ensure canvas exists in all embeds
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => startMenuSystem());
+} else {
+    startMenuSystem();
+}

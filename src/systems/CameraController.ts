@@ -37,14 +37,14 @@ export class CameraController {
     constructor(camera: THREE.OrthographicCamera, config: Partial<CameraFollowConfig> = {}) {
         this.camera = camera;
 
-        // Set default config - adjusted for the new zoomed out camera view
+        // Set default config - balanced for good visibility and gameplay
         this.config = {
-            followDistance: 15, // Increased from 10 to account for larger frustum
-            followHeight: 20,   // Increased from 15 to maintain good perspective
-            followOffset: 8,    // Increased from 5 for better positioning
+            followDistance: 25, // Good distance to show track ahead without being too far
+            followHeight: 25,   // Balanced height for good perspective
+            followOffset: 12,   // Good side offset for isometric view
             smoothness: 0.05,
             lookAtTarget: true,
-            minFollowDistance: 3, // Increased from 2
+            minFollowDistance: 3, // Reasonable minimum distance
             ...config
         };
 

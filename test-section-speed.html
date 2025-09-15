@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Section Speed Progression</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        #container {
+            width: 100%;
+            height: 100vh;
+        }
+        .speed-info {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .section-info {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div id="info">
+        <div>Press SPACE to simulate section completion</div>
+        <div>Press R to reset</div>
+        <div class="section-info">Current Section: <span id="currentSection">0</span></div>
+        <div class="section-info">Sections Passed: <span id="sectionsPassed">0</span></div>
+        <div class="speed-info">Current Speed: <span id="currentSpeed">5.00</span></div>
+        <div class="speed-info">Speed Multiplier: <span id="speedMultiplier">1.00x</span></div>
+        <div class="speed-info">Base Speed: <span id="baseSpeed">5.00</span></div>
+        <div>Expected: 5% increase per section, max 5x base speed</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TrolleyController } from './src/systems/TrolleyController.ts';
+        import { DEFAULT_CONFIG } from './src/models/GameConfig.ts';
+
+        // Create scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x87CEEB);
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // Create trolley controller
+        const trolleyController = new TrolleyController(DEFAULT_CONFIG);
+        
+        // Create simple trolley representation
+        const trolleyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+        const trolleyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const trolleyMesh = new THREE.Mesh(trolleyGeometry, trolleyMaterial);
+        scene.add(trolleyMesh);
+        trolleyController.setMesh(trolleyMesh);
+
+        // Create track representation
+        const trackGeometry = new THREE.PlaneGeometry(2, 1000);
+        const trackMaterial = new THREE.MeshBasicMaterial({ color: 0x654321 });
+        const trackMesh = new THREE.Mesh(trackGeometry, trackMaterial);
+        trackMesh.rotation.x = -Math.PI / 2;
+        trackMesh.position.z = 500;
+        scene.add(trackMesh);
+
+        // Position camera
+        camera.position.set(0, 10, -10);
+        camera.lookAt(0, 0, 0);
+
+        // UI elements
+        const currentSectionEl = document.getElementById('currentSection');
+        const sectionsPassedEl = document.getElementById('sectionsPassed');
+        const currentSpeedEl = document.getElementById('currentSpeed');
+        const speedMultiplierEl = document.getElementById('speedMultiplier');
+        const baseSpeedEl = document.getElementById('baseSpeed');
+
+        function updateUI() {
+            const position = trolleyController.position;
+            const sectionLength = DEFAULT_CONFIG.tracks.segmentLength * 2.5;
+            const currentSection = Math.floor(position.z / sectionLength);
+            
+            currentSectionEl.textContent = currentSection;
+            sectionsPassedEl.textContent = trolleyController.sectionsPassed;
+            currentSpeedEl.textContent = trolleyController.speed.toFixed(2);
+            speedMultiplierEl.textContent = trolleyController.getSpeedMultiplier().toFixed(2) + 'x';
+            baseSpeedEl.textContent = trolleyController.baseSpeed.toFixed(2);
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (event) => {
+            switch(event.code) {
+                case 'Space':
+                    event.preventDefault();
+                    // Simulate completing a section by moving trolley forward by one section length
+                    const sectionLength = DEFAULT_CONFIG.tracks.segmentLength * 2.5;
+                    const currentPos = trolleyController.position;
+                    trolleyController.setPosition(new THREE.Vector3(
+                        currentPos.x, 
+                        currentPos.y, 
+                        currentPos.z + sectionLength
+                    ));
+                    console.log(`Moved to section ${Math.floor(trolleyController.position.z / sectionLength)}`);
+                    break;
+                case 'KeyR':
+                    trolleyController.reset();
+                    console.log('Reset trolley');
+                    break;
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update trolley (this will handle speed progression automatically)
+            trolleyController.update(0.016); // 60 FPS
+            
+            // Update camera to follow trolley
+            const trolleyPos = trolleyController.position;
+            camera.position.z = trolleyPos.z - 10;
+            camera.lookAt(trolleyPos.x, trolleyPos.y, trolleyPos.z);
+            
+            updateUI();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize
+        updateUI();
+        animate();
+
+        console.log('Test Controls:');
+        console.log('- SPACE: Complete a section (should increase speed by 5%)');
+        console.log('- R: Reset trolley');
+        console.log('Expected behavior: Speed should increase by 5% per section, max 5x base speed');
+        console.log('Section 0: 5.00 speed (1.00x)');
+        console.log('Section 1: 5.25 speed (1.05x)');
+        console.log('Section 2: 5.51 speed (1.10x)');
+        console.log('Section 3: 5.79 speed (1.16x)');
+        console.log('...');
+        console.log('Section 33: 25.00 speed (5.00x) - should cap here');
+    </script>
+</body>
+</html>

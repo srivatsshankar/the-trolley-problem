@@ -48,7 +48,7 @@ export class TrackSelector {
             if (typeof AnyWindow.FontFace !== 'function') {
                 return;
             }
-            const font = new AnyWindow.FontFace('Minecraft', 'url(/src/assets/fonts/Minecraft.ttf)');
+            const font = new AnyWindow.FontFace('Minecraft', 'url(./assets/fonts/Minecraft.ttf)');
             await font.load();
             (document as any).fonts.add(font);
             this.fontLoaded = true;

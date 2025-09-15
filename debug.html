@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trolley Problem Game - Debug</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="debug">
+        <div id="log">Loading...</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Debug logging function
+        function debugLog(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        // Override console methods to capture logs
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        console.log = function(...args) {
+            debugLog(args.join(' '), 'info');
+            originalLog.apply(console, args);
+        };
+
+        console.error = function(...args) {
+            debugLog(args.join(' '), 'error');
+            originalError.apply(console, args);
+        };
+
+        console.warn = function(...args) {
+            debugLog(args.join(' '), 'warn');
+            originalWarn.apply(console, args);
+        };
+
+        // Capture unhandled errors
+        window.addEventListener('error', (event) => {
+            debugLog(`Unhandled error: ${event.error?.message || event.message}`, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            debugLog(`Unhandled promise rejection: ${event.reason}`, 'error');
+        });
+
+        // Basic system checks
+        debugLog('Starting debug checks...');
+        debugLog(`User Agent: ${navigator.userAgent}`);
+        debugLog(`Screen: ${screen.width}x${screen.height}`);
+        debugLog(`Window: ${window.innerWidth}x${window.innerHeight}`);
+        debugLog(`Document ready state: ${document.readyState}`);
+        debugLog(`Canvas element exists: ${!!document.getElementById('gameCanvas')}`);
+
+        // Check WebGL support
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            debugLog(`WebGL supported: ${!!gl}`, gl ? 'success' : 'error');
+            if (gl) {
+                debugLog(`WebGL Vendor: ${gl.getParameter(gl.VENDOR)}`);
+                debugLog(`WebGL Renderer: ${gl.getParameter(gl.RENDERER)}`);
+            }
+        } catch (e) {
+            debugLog(`WebGL check failed: ${e.message}`, 'error');
+        }
+
+        // Test basic Three.js functionality
+        debugLog('Testing Three.js import...');
+    </script>
+    
+    <!-- Load the main game script -->
+    <script type="module" src="./assets/index-1de0255d.js"></script>
+    
+    <script>
+        // Final checks after script load
+        setTimeout(() => {
+            debugLog('Final checks after 2 seconds...');
+            debugLog(`THREE available: ${typeof THREE !== 'undefined'}`);
+            
+            const canvas = document.getElementById('gameCanvas');
+            if (canvas) {
+                debugLog(`Canvas dimensions: ${canvas.width}x${canvas.height}`);
+                debugLog(`Canvas style: ${canvas.style.display}`);
+            }
+            
+            // Try to create a simple Three.js scene
+            if (typeof THREE !== 'undefined') {
+                try {
+                    const scene = new THREE.Scene();
+                    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+                    const renderer = new THREE.WebGLRenderer({ canvas: canvas });
+                    debugLog('Basic Three.js objects created successfully!', 'success');
+                } catch (e) {
+                    debugLog(`Three.js creation failed: ${e.message}`, 'error');
+                }
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

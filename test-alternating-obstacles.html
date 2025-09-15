@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Alternating Obstacles with Visible Wheels</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        #container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #333;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%);
+        }
+        
+        #info {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            margin-bottom: 10px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Alternating Obstacles with Visible Wheels</h1>
+    <p>Testing the alternating obstacle pattern (rock/trolley) and improved wheel visibility for trolley obstacles.</p>
+    
+    <div class="controls">
+        <button onclick="resetCamera()">Reset Camera</button>
+        <button onclick="toggleWireframe()">Toggle Wireframe</button>
+        <button onclick="focusOnObstacles()">Focus on Obstacles</button>
+    </div>
+    
+    <div id="container"></div>
+    
+    <div id="info">
+        <h3>Test Results:</h3>
+        <div id="obstacleInfo">Loading...</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from './node_modules/three/build/three.module.js';
+        import { createObstacle } from './dist/models/Obstacle.js';
+
+        let scene, camera, renderer;
+        let obstacles = [];
+        let wireframeMode = false;
+
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, 800 / 600, 0.1, 1000);
+            camera.position.set(0, 3, 8);
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(800, 600);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // Create ground plane
+            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Create railway tracks for reference
+            createRailwayTracks();
+
+            // Create alternating obstacles to test the pattern
+            createAlternatingObstacles();
+
+            // Update info display
+            updateObstacleInfo();
+
+            // Start render loop
+            animate();
+        }
+
+        function createRailwayTracks() {
+            // Create simple railway tracks for reference
+            const trackGeometry = new THREE.BoxGeometry(0.2, 0.1, 15);
+            const trackMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+
+            // Left rail
+            const leftRail = new THREE.Mesh(trackGeometry, trackMaterial);
+            leftRail.position.set(-0.7, 0.25, 0);
+            scene.add(leftRail);
+
+            // Right rail
+            const rightRail = new THREE.Mesh(trackGeometry, trackMaterial);
+            rightRail.position.set(0.7, 0.25, 0);
+            scene.add(rightRail);
+
+            // Add ties
+            const tieGeometry = new THREE.BoxGeometry(2, 0.15, 0.3);
+            const tieMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+
+            for (let i = -7; i <= 7; i++) {
+                const tie = new THREE.Mesh(tieGeometry, tieMaterial);
+                tie.position.set(0, 0.075, i * 1);
+                scene.add(tie);
+            }
+        }
+
+        function createAlternatingObstacles() {
+            // Test alternating pattern: rock, trolley, rock, trolley, etc.
+            const positions = [
+                new THREE.Vector3(0, 0.5, -6),  // Segment 0 - should be rock
+                new THREE.Vector3(0, 0.5, -4),  // Segment 1 - should be trolley
+                new THREE.Vector3(0, 0.5, -2),  // Segment 2 - should be rock
+                new THREE.Vector3(0, 0.5, 0),   // Segment 3 - should be trolley
+                new THREE.Vector3(0, 0.5, 2),   // Segment 4 - should be rock
+                new THREE.Vector3(0, 0.5, 4),   // Segment 5 - should be trolley
+                new THREE.Vector3(0, 0.5, 6)    // Segment 6 - should be rock
+            ];
+
+            positions.forEach((position, index) => {
+                // Simulate the alternating pattern: even indices = rock, odd indices = trolley
+                const obstacleType = index % 2 === 0 ? 'rock' : 'trolley';
+                const obstacle = createObstacle(obstacleType, position);
+                
+                scene.add(obstacle.getGroup());
+                obstacles.push({
+                    obstacle: obstacle,
+                    type: obstacleType,
+                    segmentIndex: index,
+                    position: position
+                });
+            });
+        }
+
+        function updateObstacleInfo() {
+            let infoHtml = '<h4>Obstacle Pattern Test:</h4>';
+            infoHtml += '<ul>';
+            
+            obstacles.forEach((obs, index) => {
+                infoHtml += `<li><strong>Segment ${obs.segmentIndex}:</strong> ${obs.type} at position (${obs.position.x.toFixed(1)}, ${obs.position.y.toFixed(1)}, ${obs.position.z.toFixed(1)})</li>`;
+            });
+            
+            infoHtml += '</ul>';
+            infoHtml += '<p><strong>Pattern Check:</strong> ';
+            
+            // Verify alternating pattern
+            let patternCorrect = true;
+            for (let i = 0; i < obstacles.length; i++) {
+                const expectedType = i % 2 === 0 ? 'rock' : 'trolley';
+                if (obstacles[i].type !== expectedType) {
+                    patternCorrect = false;
+                    break;
+                }
+            }
+            
+            infoHtml += patternCorrect ? 
+                '<span style="color: green;">✅ Alternating pattern is correct!</span>' : 
+                '<span style="color: red;">❌ Alternating pattern is incorrect!</span>';
+            infoHtml += '</p>';
+            
+            // Check trolley wheel visibility
+            const trolleyObstacles = obstacles.filter(obs => obs.type === 'trolley');
+            infoHtml += `<p><strong>Trolley Obstacles:</strong> ${trolleyObstacles.length} found</p>`;
+            infoHtml += '<p><strong>Wheel Visibility:</strong> Check that trolley wheels are visible above the track level.</p>';
+            
+            document.getElementById('obstacleInfo').innerHTML = infoHtml;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate camera around the scene for better viewing
+            const time = Date.now() * 0.0005;
+            camera.position.x = Math.cos(time) * 10;
+            camera.position.z = Math.sin(time) * 10;
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+        }
+
+        // Global functions for buttons
+        window.resetCamera = function() {
+            camera.position.set(0, 3, 8);
+            camera.lookAt(0, 0, 0);
+        };
+
+        window.toggleWireframe = function() {
+            wireframeMode = !wireframeMode;
+            obstacles.forEach(obs => {
+                obs.obstacle.getGroup().traverse((child) => {
+                    if (child instanceof THREE.Mesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => mat.wireframe = wireframeMode);
+                        } else {
+                            child.material.wireframe = wireframeMode;
+                        }
+                    }
+                });
+            });
+        };
+
+        window.focusOnObstacles = function() {
+            // Focus camera on the middle of the obstacle line
+            camera.position.set(5, 2, 0);
+            camera.lookAt(0, 0, 0);
+        };
+
+        // Initialize the scene
+        init();
+    </script>
+</body>
+</html>

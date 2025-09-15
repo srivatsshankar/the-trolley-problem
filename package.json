@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --project tsconfig.build.json --noEmit && vite build",
-    "build:prod": "tsc --build --force && vite build",
+    "postbuild": "node scripts/postbuild.js",
+  "build:prod": "tsc --build --force && vite build && npm run postbuild",
     "preview": "vite preview",
     "test": "vitest --run",
     "test:watch": "vitest"
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@types/three": "^0.158.3",
+    "archiver": "^6.0.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.2.2",
     "vite": "^4.5.0",
