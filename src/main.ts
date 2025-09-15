@@ -206,10 +206,21 @@ function initializeGame(): void {
         collisionManager = new CollisionManager(detection);
         collisionManager.setCollisionEffects(collisionEffects);
         if (crashSystem) collisionManager.setCrashSystem(crashSystem);
-        // optional: show game over UI when animation ends
+        // Show Game Over overlay when crash animation ends
         collisionManager.setCrashCompleteHandler(() => {
             console.log('Crash animation finished – Game Over');
-            // TODO: show Game Over screen/UI here
+            if (!gameState) return;
+            gameState.endGame(true);
+            // Pause updates
+            gameStarted = false;
+            // Show Game Over styled like main menu
+            menuManager.showGameOver({
+                score: gameState.score,
+                peopleHit: gameState.peopleHit,
+                peopleAvoided: gameState.peopleAvoided,
+            });
+            // Switch to menu render loop so overlay is responsive
+            startMenuRenderLoop();
         });
         
         // Start game animation loop
@@ -500,6 +511,41 @@ function initializeMenuSystem(): void {
         console.log('Starting game from menu...');
         startGame();
     });
+
+    // Wire Game Over actions
+    menuManager.onRestartGameCallback(() => {
+        if (!gameState) return;
+        // Reset state and restart play
+        gameState.reset();
+        hideAllOverlays();
+        gameStarted = true;
+        switchToGameCamera();
+        // Make sure the trolley and systems reset baseline
+        if (trolleyController) {
+            trolleyController.reset();
+            trolleyController.setPosition(new THREE.Vector3(0,0,2));
+            // Ensure forward movement resumes
+            trolleyController.setSpeed(trolleyController.baseSpeed);
+        }
+        if (collisionManager) collisionManager.reset();
+        if (crashSystem) crashSystem.reset();
+        wheelSparksEnabled = false;
+        // Reattach camera follow
+        if (cameraController) {
+            const tg = trolleyController?.getTrolleyGroup();
+            if (tg) cameraController.setTarget(tg);
+        }
+        startGameAnimationLoop();
+    });
+    menuManager.onReturnToMenuCallback(() => {
+        // Return to main menu state; keep menu render loop
+        hideAllOverlays();
+        gameStarted = false;
+        switchToMenuCamera();
+        if (cameraController) cameraController.resetCamera();
+        menuManager.showMainMenu();
+        startMenuRenderLoop();
+    });
     
     // Initialize and show main menu
     menuManager.initialize();
@@ -527,6 +573,11 @@ function startGame(): void {
     
     // Initialize the game objects
     initializeGame();
+}
+
+function hideAllOverlays(): void {
+    // Currently menus manage their own visibility; ensure Game Over is hidden by showing main menu state appropriately.
+    // This helper exists for symmetry and future overlay cleanup.
 }
 
 // Start after DOM is ready to ensure canvas exists in all embeds

@@ -447,6 +447,10 @@ export class GameController {
   private showGameOverScreen(): void {
     this.log('Showing game over screen');
     this.currentPhase = GamePhase.GAME_OVER;
+    // Ensure game state reflects game over so other systems stop updating in-game UI
+    if (!this.gameState.isGameOver) {
+      this.gameState.endGame(true);
+    }
     
     if (this.uiManager) {
       this.uiManager.showGameOverScreen();

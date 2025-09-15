@@ -97,6 +97,10 @@ export class SceneManager {
         
         // Look at the center of the scene
         this.camera.lookAt(0, 0, 0);
+
+        // Ensure the camera (and any children such as UI overlays) are part of the scene graph
+        // This allows UI groups attached to the camera to render correctly
+        this.scene.add(this.camera);
         
         this.log(`Isometric camera positioned at (${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z}) with frustum size ${frustumSize}`);
     }

@@ -69,7 +69,7 @@ export class GameState {
    * Requirement 9.3: End game when hitting barrier
    * Note: People collisions don't update score here - only at section completion
    */
-  processCollisionResults(collisionResults: Array<{type: 'obstacle' | 'person', object: any}>): void {
+  processCollisionResults(collisionResults: Array<{type: 'obstacle' | 'person', object: any}>, delayGameEnd: boolean = false): void {
     let hitBarrier = false;
 
     for (const collision of collisionResults) {
@@ -80,8 +80,12 @@ export class GameState {
     }
 
     // End game if barrier was hit (no score change for barriers)
-    if (hitBarrier) {
+    // Unless delayGameEnd is true (for bounce animations)
+    if (hitBarrier && !delayGameEnd) {
       this.endGame(true);
+    } else if (hitBarrier) {
+      // Mark that we hit a barrier but don't end game yet
+      this._hitBarrier = true;
     }
 
     // Score is only updated at section completion, not during individual collisions

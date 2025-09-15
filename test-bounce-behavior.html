@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bounce Behavior</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        #gameContainer {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #333;
+            position: relative;
+        }
+
+        #controls {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        #info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Trolley Bounce Behavior Test</h1>
+    <div id="gameContainer"></div>
+
+    <div id="controls">
+        <button onclick="triggerBounce()">Trigger Complete Sequence (Bounce + Crash)</button>
+        <button onclick="triggerCrash()">Trigger Crash Only (No Bounce)</button>
+        <button onclick="resetTrolley()">Reset Trolley</button>
+    </div>
+
+    <div id="info">
+        <h3>Test Status:</h3>
+        <div id="status">Ready to test...</div>
+        <div id="bounceInfo">
+            <strong>Complete Sequence:</strong><br>
+            1. Bounce backward (200ms)<br>
+            2. Stop smoke from chimney<br>
+            3. Lights flicker red/blue (2s)<br>
+            4. Windows flicker light/dark blue (2s)<br>
+            5. Trolley catches fire (5s) - <strong>stays upright</strong><br>
+            6. Game over screen<br><br>
+            <strong>Note:</strong> Trolley never falls or tips over!
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { TrolleyController } from './src/systems/TrolleyController.js';
+        import { TrolleyCrashSystem } from './src/systems/TrolleyCrashSystem.js';
+        import { GameConfig } from './src/models/GameConfig.js';
+
+        // Initialize Three.js scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 600, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth - 40, 600);
+        renderer.setClearColor(0x87CEEB);
+        document.getElementById('gameContainer').appendChild(renderer.domElement);
+
+        // Add lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 5);
+        scene.add(directionalLight);
+
+        // Create game config with bounce enabled
+        const gameConfig = new GameConfig({
+            effects: {
+                bounceOnBarrierHit: {
+                    enabled: true,
+                    force: 0.3,
+                    duration: 200
+                }
+            }
+        });
+
+        // Create trolley controller
+        const trolleyController = new TrolleyController(gameConfig);
+        const trolley = trolleyController.createTrolley();
+        scene.add(trolley.getGroup());
+
+        // Create crash system
+        const crashSystem = new TrolleyCrashSystem(scene);
+        crashSystem.setTrolley(trolley);
+
+        // Position camera
+        camera.position.set(0, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        // Create simple track visualization
+        const trackGeometry = new THREE.PlaneGeometry(2, 50);
+        const trackMaterial = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+        const track = new THREE.Mesh(trackGeometry, trackMaterial);
+        track.rotation.x = -Math.PI / 2;
+        track.position.y = -0.1;
+        scene.add(track);
+
+        // Create barrier for collision testing
+        const barrierGeometry = new THREE.BoxGeometry(0.5, 2, 0.2);
+        const barrierMaterial = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+        const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+        barrier.position.set(0, 1, 5);
+        scene.add(barrier);
+
+        // Status tracking
+        let isAnimating = false;
+        const statusDiv = document.getElementById('status');
+
+        // Global functions for buttons
+        window.triggerBounce = function () {
+            if (isAnimating) return;
+
+            statusDiv.textContent = 'Testing complete bounce + crash sequence...';
+            isAnimating = true;
+
+            // Position trolley near barrier
+            trolleyController.setPosition(new THREE.Vector3(0, 0, 4.5));
+
+            // Trigger bounce with crash sequence
+            trolleyController.startBounce(() => {
+                statusDiv.textContent = 'Bounce complete - Starting crash sequence (smoke stops, lights flicker, fire for 5s)...';
+                
+                // Start crash animation after bounce
+                crashSystem.startCrashAnimation(() => {
+                    isAnimating = false;
+                    statusDiv.textContent = 'Complete sequence finished! Game would show game over screen now.';
+                });
+            });
+        };
+
+        window.triggerCrash = function () {
+            if (isAnimating) return;
+
+            statusDiv.textContent = 'Testing crash animation (no side turn)...';
+            isAnimating = true;
+
+            // Position trolley near barrier
+            trolleyController.setPosition(new THREE.Vector3(0, 0, 4.5));
+
+            // Trigger crash
+            crashSystem.startCrashAnimation(() => {
+                isAnimating = false;
+                statusDiv.textContent = 'Crash test complete. Trolley should have stayed upright with minimal side rotation.';
+            });
+        };
+
+        window.resetTrolley = function () {
+            trolleyController.reset();
+            crashSystem.reset();
+            isAnimating = false;
+            statusDiv.textContent = 'Trolley reset to starting position.';
+        };
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const deltaTime = 0.016; // ~60 FPS
+
+            // Update systems
+            trolleyController.update(deltaTime);
+            crashSystem.update(deltaTime);
+
+            // Update camera to follow trolley
+            const trolleyPos = trolleyController.position;
+            camera.position.x = trolleyPos.x;
+            camera.position.z = trolleyPos.z + 8;
+            camera.lookAt(trolleyPos.x, trolleyPos.y, trolleyPos.z);
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

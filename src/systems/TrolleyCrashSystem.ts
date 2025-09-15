@@ -1,6 +1,7 @@
 /**
  * TrolleyCrashSystem - Handles trolley crash animation sequence
- * Implements crash effects: immediate stop, smoke stop, light flicker, window flicker, fall and fire
+ * Implements crash effects: immediate stop, smoke stop, light flicker, window flicker, and fire
+ * Trolley remains upright throughout the entire crash sequence
  */
 
 import * as THREE from 'three';
@@ -10,7 +11,6 @@ import { VisualEffectsSystem } from './VisualEffectsSystem';
 export interface CrashAnimationConfig {
     lightFlickerDuration: number;
     windowFlickerDuration: number;
-    fallDuration: number;
     fireDuration: number;
     totalAnimationDuration: number;
 }
@@ -23,7 +23,7 @@ export class TrolleyCrashSystem {
     // Animation state
     private isCrashing: boolean = false;
     private crashStartTime: number = 0;
-    private animationPhase: 'lights' | 'fall' | 'fire' | 'complete' = 'lights';
+    private animationPhase: 'lights' | 'fire' | 'complete' = 'lights';
 
     // Animation config
     private config: CrashAnimationConfig;
@@ -51,9 +51,8 @@ export class TrolleyCrashSystem {
         this.config = {
             lightFlickerDuration: 2.0,
             windowFlickerDuration: 2.0,
-            fallDuration: 1.5,
-            fireDuration: 3.0,
-            totalAnimationDuration: 6.5,
+            fireDuration: 5.0, // 5 seconds of fire as requested
+            totalAnimationDuration: 7.0, // Reduced total duration (no fall phase)
             ...config
         };
     }
@@ -85,7 +84,7 @@ export class TrolleyCrashSystem {
         this.animationPhase = 'lights';
         this.onAnimationComplete = onComplete;
 
-        // Store original state
+        // Store original state (current position after bounce)
         const trolleyGroup = this.trolley.getGroup();
         this.originalPosition.copy(trolleyGroup.position);
         this.originalRotation.copy(trolleyGroup.rotation);
@@ -93,7 +92,7 @@ export class TrolleyCrashSystem {
         // Immediately stop trolley movement
         this.trolley.setAnimating(false);
 
-        // Stop smoke particles
+        // Stop smoke particles immediately
         this.stopSmokeEffect();
 
         // Create explosion effect at collision point
@@ -111,21 +110,15 @@ export class TrolleyCrashSystem {
         const currentTime = Date.now() * 0.001;
         const elapsedTime = currentTime - this.crashStartTime;
 
-        // Update animation phases
+        // Update animation phases - no fall phase, trolley stays upright
         if (elapsedTime < this.config.lightFlickerDuration) {
             this.updateLightFlicker(deltaTime);
             this.updateWindowFlicker(deltaTime);
-        } else if (elapsedTime < this.config.lightFlickerDuration + this.config.fallDuration) {
-            if (this.animationPhase === 'lights') {
-                this.animationPhase = 'fall';
-                console.log('[TrolleyCrashSystem] Starting fall phase');
-            }
-            this.updateFallAnimation(elapsedTime - this.config.lightFlickerDuration);
         } else if (elapsedTime < this.config.totalAnimationDuration) {
-            if (this.animationPhase === 'fall') {
+            if (this.animationPhase === 'lights') {
                 this.animationPhase = 'fire';
                 this.createFireEffect();
-                console.log('[TrolleyCrashSystem] Starting fire phase');
+                console.log('[TrolleyCrashSystem] Starting fire phase - trolley stays upright');
             }
             this.updateFireEffect(deltaTime);
         } else {
@@ -194,28 +187,7 @@ export class TrolleyCrashSystem {
         });
     }
 
-    /**
-     * Update fall animation (trolley falls on its side)
-     */
-    private updateFallAnimation(fallTime: number): void {
-        const trolleyGroup = this.trolley!.getGroup();
-        const fallProgress = Math.min(fallTime / this.config.fallDuration, 1.0);
 
-        // Ease-in fall animation
-        const easeProgress = 1 - Math.pow(1 - fallProgress, 3);
-
-        // Rotate trolley to fall on its side (90 degrees around Z axis)
-        const targetRotation = Math.PI / 2;
-        trolleyGroup.rotation.z = this.originalRotation.z + (targetRotation * easeProgress);
-
-        // Slight downward movement as it falls
-        const fallDistance = 0.5;
-        trolleyGroup.position.y = this.originalPosition.y - (fallDistance * easeProgress);
-
-        // Add some forward momentum
-        const forwardDistance = 1.0;
-        trolleyGroup.position.z = this.originalPosition.z + (forwardDistance * easeProgress);
-    }
 
     /**
      * Create fire effect particles
@@ -223,7 +195,7 @@ export class TrolleyCrashSystem {
     private createFireEffect(): void {
         const trolleyGroup = this.trolley!.getGroup();
         const firePosition = trolleyGroup.position.clone();
-        firePosition.y += 0.5; // Slightly above the fallen trolley
+        firePosition.y += 1.0; // Above the upright trolley
 
         // Create multiple fire particle systems
         for (let i = 0; i < 3; i++) {
@@ -341,9 +313,15 @@ export class TrolleyCrashSystem {
      */
     private completeAnimation(): void {
         console.log('[TrolleyCrashSystem] Crash animation complete');
+        // Mark animation as no longer playing
+        this.isCrashing = false;
+        this.animationPhase = 'complete';
 
+        // Fire completion callback once
         if (this.onAnimationComplete) {
-            this.onAnimationComplete();
+            const cb = this.onAnimationComplete;
+            this.onAnimationComplete = undefined;
+            cb();
         }
     }
 
@@ -373,11 +351,11 @@ export class TrolleyCrashSystem {
         });
         this.fireParticles = [];
 
-        // Restore trolley if available
+        // Restore trolley if available - trolley stays in normal upright position
         if (this.trolley) {
             const trolleyGroup = this.trolley.getGroup();
-            trolleyGroup.position.copy(this.originalPosition);
-            trolleyGroup.rotation.copy(this.originalRotation);
+            // Keep trolley in its current position (no need to restore fall position)
+            trolleyGroup.rotation.copy(this.originalRotation); // Restore original rotation only
             this.trolley.setAnimating(true);
 
             // Restore smoke

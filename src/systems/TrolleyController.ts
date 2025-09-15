@@ -43,6 +43,7 @@ export class TrolleyController {
   private _bounceStartTime: number = 0;
   private _bounceStartPosition: number = 0;
   private _bounceDirection: number = 0; // -1 for backward bounce
+  private _onBounceComplete?: () => void;
   
   private config: GameConfig;
   private mesh?: THREE.Object3D;
@@ -225,26 +226,33 @@ export class TrolleyController {
   /**
    * Update bounce animation when trolley hits a barrier
    */
-  private updateBounceAnimation(deltaTime: number): void {
+  private updateBounceAnimation(_deltaTime: number): void {
     const currentTime = Date.now() * 0.001;
     const elapsedTime = currentTime - this._bounceStartTime;
     const bounceConfig = this.config.effects.bounceOnBarrierHit;
     const bounceDuration = bounceConfig.duration * 0.001; // Convert ms to seconds
 
     if (elapsedTime >= bounceDuration) {
-      // Bounce complete, stop bouncing and resume normal movement
+      // Bounce complete, stop bouncing and stay at final position
       this._isBouncing = false;
-      this._speed = this._baseSpeed * 0.5; // Resume at reduced speed
-      console.log('[TrolleyController] Bounce animation complete, resuming movement');
+      this._speed = 0; // Stop completely after bounce
+      console.log('[TrolleyController] Bounce animation complete, trolley stopped');
+      
+      // Call completion callback if set
+      if (this._onBounceComplete) {
+        this._onBounceComplete();
+        this._onBounceComplete = undefined;
+      }
       return;
     }
 
     // Calculate bounce progress (0 to 1)
     const progress = elapsedTime / bounceDuration;
     
-    // Use a sine wave for smooth bounce back and forth
-    const bounceIntensity = Math.sin(progress * Math.PI);
-    const bounceDistance = bounceConfig.force * bounceIntensity;
+    // Use a single backward bounce with easing (not continuous sine wave)
+    // Ease out function: starts fast, slows down
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const bounceDistance = bounceConfig.force * easeOut;
     
     // Apply bounce movement (backward from collision point)
     this._position.z = this._bounceStartPosition + (this._bounceDirection * bounceDistance);
@@ -259,7 +267,7 @@ export class TrolleyController {
   /**
    * Start bounce animation when hitting a barrier
    */
-  public startBounce(): void {
+  public startBounce(onComplete?: () => void): void {
     if (!this.config.effects.bounceOnBarrierHit.enabled || this._isBouncing) {
       return;
     }
@@ -271,6 +279,7 @@ export class TrolleyController {
     this._bounceStartPosition = this._position.z;
     this._bounceDirection = -1; // Bounce backward
     this._speed = 0; // Stop forward movement during bounce
+    this._onBounceComplete = onComplete;
 
     // Show visual feedback on trolley
     if (this.trolley) {
@@ -498,6 +507,7 @@ export class TrolleyController {
     this._bounceStartTime = 0;
     this._bounceStartPosition = 0;
     this._bounceDirection = 0;
+    this._onBounceComplete = undefined;
     
   // Set X position to current track
     this._position.x = this.trackPositions[this._currentTrack - 1];

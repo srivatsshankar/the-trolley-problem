@@ -93,10 +93,7 @@ export class CollisionManager {
       return collisions;
     }
 
-    // If an obstacle was hit, immediately stop the trolley movement
-    if (collisions.some(c => c.type === 'obstacle')) {
-      trolleyController.setSpeed(0);
-    }
+    // Note: Speed handling is now done in bounce animation or crash system
 
     // Process each collision
     for (const collision of collisions) {
@@ -104,7 +101,10 @@ export class CollisionManager {
     }
 
     // Update game state with collision results
-    gameState.processCollisionResults(collisions);
+    // Delay game end if bounce is active for obstacle collisions
+    const hasObstacleCollision = collisions.some(c => c.type === 'obstacle');
+    const isBouncing = hasObstacleCollision && trolleyController && typeof trolleyController.isBouncing === 'function' && trolleyController.isBouncing();
+    gameState.processCollisionResults(collisions, isBouncing);
 
     return collisions;
   }
@@ -130,12 +130,31 @@ export class CollisionManager {
 
     // Check if bounce is enabled and trolley controller is available
     if (trolleyController && typeof trolleyController.startBounce === 'function') {
-      // Start bounce animation instead of immediate crash
-      trolleyController.startBounce();
+      // Start bounce animation, then crash sequence
+      trolleyController.startBounce(() => {
+        // After bounce completes, start the full crash sequence
+        console.log('Bounce complete - Starting crash sequence');
+        
+        // Start crash animation if crash system is available
+        if (this.crashSystem) {
+          this.crashSystem.startCrashAnimation(() => {
+            // End game after crash animation completes
+            this.currentSegmentCollisions.gameEnded = true;
+            if (this.onCrashComplete) {
+              this.onCrashComplete();
+            }
+          });
+        } else {
+          // No crash system, just end the game
+          this.currentSegmentCollisions.gameEnded = true;
+          if (this.onCrashComplete) {
+            this.onCrashComplete();
+          }
+        }
+      });
       console.log('Obstacle collision detected - Starting bounce animation!');
       
-      // Don't end the game immediately, let the bounce complete first
-      // The game will end after bounce animation if configured to do so
+      // Don't end the game immediately, let the bounce and crash sequence complete
     } else {
       // Fallback to immediate crash if bounce not available
       this.currentSegmentCollisions.gameEnded = true;

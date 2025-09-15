@@ -94,14 +94,17 @@ export class UIManager {
     private createGameUI(): void {
         // Create score display
         this.scoreDisplay = this.createScoreDisplay();
+        this.elevateUiMesh(this.scoreDisplay.mesh);
         this.gameUIGroup.add(this.scoreDisplay.mesh);
         
         // Create statistics display
-        this.statisticsDisplay = this.createStatisticsDisplay();
-        this.gameUIGroup.add(this.statisticsDisplay.mesh);
+    this.statisticsDisplay = this.createStatisticsDisplay();
+    this.elevateUiMesh(this.statisticsDisplay.mesh);
+    this.gameUIGroup.add(this.statisticsDisplay.mesh);
         
         // Create pause button
         this.pauseButton = this.createPauseButton();
+        this.elevateUiMesh(this.pauseButton.mesh);
         this.gameUIGroup.add(this.pauseButton.mesh);
         
         this.log('Game UI elements created');
@@ -267,19 +270,23 @@ export class UIManager {
             transparent: true,
             opacity: 0.7
         });
-        const overlay = new THREE.Mesh(overlayGeometry, overlayMaterial);
+    const overlay = new THREE.Mesh(overlayGeometry, overlayMaterial);
         overlay.position.set(0, 0, 0.5);
+    this.elevateUiMesh(overlay);
         this.pauseUIGroup.add(overlay);
         
         // Create pause menu buttons
-        const resumeButton = this.createMenuButton('Resume', new THREE.Vector3(-2, 1, 1), () => this.onResumeGame());
-        const menuButton = this.createMenuButton('Main Menu', new THREE.Vector3(2, 1, 1), () => this.onReturnToMenu());
+    const resumeButton = this.createMenuButton('Resume', new THREE.Vector3(-2, 1, 1), () => this.onResumeGame());
+    const menuButton = this.createMenuButton('Main Menu', new THREE.Vector3(2, 1, 1), () => this.onReturnToMenu());
+    this.elevateUiMesh(resumeButton);
+    this.elevateUiMesh(menuButton);
         
         this.pauseUIGroup.add(resumeButton);
         this.pauseUIGroup.add(menuButton);
         
         // Create pause title
-        const pauseTitle = this.createTextDisplay('PAUSED', new THREE.Vector3(0, 3, 1), 48, '#FFFFFF');
+    const pauseTitle = this.createTextDisplay('PAUSED', new THREE.Vector3(0, 3, 1), 48, '#FFFFFF');
+    this.elevateUiMesh(pauseTitle);
         this.pauseUIGroup.add(pauseTitle);
         
         this.log('Pause UI created');
@@ -298,35 +305,66 @@ export class UIManager {
         });
         const overlay = new THREE.Mesh(overlayGeometry, overlayMaterial);
         overlay.position.set(0, 0, 0.5);
+        this.elevateUiMesh(overlay);
         this.gameOverUIGroup.add(overlay);
         
         // Create game over title
         const gameOverTitle = this.createTextDisplay('GAME OVER', new THREE.Vector3(0, 5, 1), 48, '#FF4444');
+        this.elevateUiMesh(gameOverTitle);
         this.gameOverUIGroup.add(gameOverTitle);
         
         // Create final score display (will be updated when shown)
         const finalScoreDisplay = this.createTextDisplay('Final Score: 0', new THREE.Vector3(0, 3.5, 1), 36, '#FFFFFF');
         finalScoreDisplay.userData = { uiElementId: 'final_score' };
+        this.elevateUiMesh(finalScoreDisplay);
         this.gameOverUIGroup.add(finalScoreDisplay);
         
         // Create people hit display (blue text as specified)
         const peopleHitDisplay = this.createTextDisplay('People Hit: 0', new THREE.Vector3(0, 2, 1), 28, '#4A90E2');
         peopleHitDisplay.userData = { uiElementId: 'people_hit' };
+        this.elevateUiMesh(peopleHitDisplay);
         this.gameOverUIGroup.add(peopleHitDisplay);
         
         // Create people avoided display (red text as specified)
         const peopleAvoidedDisplay = this.createTextDisplay('People Avoided: 0', new THREE.Vector3(0, 1, 1), 28, '#E24A4A');
         peopleAvoidedDisplay.userData = { uiElementId: 'people_avoided' };
+        this.elevateUiMesh(peopleAvoidedDisplay);
         this.gameOverUIGroup.add(peopleAvoidedDisplay);
         
         // Create action buttons
         const restartButton = this.createMenuButton('Restart', new THREE.Vector3(-2, -1.5, 1), () => this.onRestartGame());
         const menuButton = this.createMenuButton('Main Menu', new THREE.Vector3(2, -1.5, 1), () => this.onReturnToMenu());
+        this.elevateUiMesh(restartButton);
+        this.elevateUiMesh(menuButton);
         
         this.gameOverUIGroup.add(restartButton);
         this.gameOverUIGroup.add(menuButton);
         
         this.log('Game Over UI created');
+    }
+
+    /**
+     * Force UI meshes to render on top of 3D scene
+     */
+    private elevateUiMesh(mesh: THREE.Object3D): void {
+        mesh.renderOrder = 999;
+        mesh.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                child.renderOrder = 999;
+                const mtl = child.material as THREE.Material | THREE.Material[] | undefined;
+                if (Array.isArray(mtl)) {
+                    mtl.forEach(mat => {
+                        if ('depthTest' in mat) {
+                            (mat as any).depthTest = false;
+                        }
+                    });
+                } else if (mtl) {
+                    if ('depthTest' in mtl) {
+                        (mtl as any).depthTest = false;
+                    }
+                }
+            }
+        });
     }
     
     /**
@@ -471,7 +509,7 @@ export class UIManager {
      */
     public showGameUI(): void {
         this.hideAllUI();
-        this.sceneManager.addToScene(this.gameUIGroup);
+        this.attachGroupToCamera(this.gameUIGroup);
         this.log('Game UI displayed');
     }
     
@@ -479,7 +517,7 @@ export class UIManager {
      * Show pause UI
      */
     public showPauseUI(): void {
-        this.sceneManager.addToScene(this.pauseUIGroup);
+        this.attachGroupToCamera(this.pauseUIGroup);
         this.log('Pause UI displayed');
     }
     
@@ -487,7 +525,7 @@ export class UIManager {
      * Hide pause UI
      */
     public hidePauseUI(): void {
-        this.sceneManager.removeFromScene(this.pauseUIGroup);
+        this.sceneManager.getCamera().remove(this.pauseUIGroup);
         this.log('Pause UI hidden');
     }
     
@@ -500,7 +538,7 @@ export class UIManager {
         // Update final score and statistics
         this.updateGameOverScreen();
         
-        this.sceneManager.addToScene(this.gameOverUIGroup);
+        this.attachGroupToCamera(this.gameOverUIGroup);
         this.log('Game Over screen displayed');
     }
     
@@ -537,9 +575,22 @@ export class UIManager {
      * Hide all UI elements
      */
     public hideAllUI(): void {
-        this.sceneManager.removeFromScene(this.gameUIGroup);
-        this.sceneManager.removeFromScene(this.pauseUIGroup);
-        this.sceneManager.removeFromScene(this.gameOverUIGroup);
+        this.sceneManager.getCamera().remove(this.gameUIGroup);
+        this.sceneManager.getCamera().remove(this.pauseUIGroup);
+        this.sceneManager.getCamera().remove(this.gameOverUIGroup);
+    }
+
+    /**
+     * Helper to attach a UI group to the camera and ensure it is in front of it
+     */
+    private attachGroupToCamera(group: THREE.Group): void {
+        const cam = this.sceneManager.getCamera();
+        cam.add(group);
+        // Place slightly in front of the camera in its local space
+        group.position.set(0, 0, -1);
+        group.updateMatrixWorld(true);
+        // Ensure children render on top as well
+        this.elevateUiMesh(group);
     }
     
     /**
