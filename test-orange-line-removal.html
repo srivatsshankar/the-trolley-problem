@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test: Orange Line Removal</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        #gameContainer {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #333;
+            position: relative;
+        }
+
+        .info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+        }
+
+        .test-instructions {
+            background: #2a4a2a;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .controls {
+            margin-top: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #555;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #666;
+        }
+
+        button.active {
+            background: #4CAF50;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-instructions">
+        <h2>🧪 Test: Orange Line Removal</h2>
+        <p><strong>What to test:</strong></p>
+        <ul>
+            <li>Select different tracks (1-5) while trolley is moving</li>
+            <li>Watch for preview lines that appear when you select a different track</li>
+            <li>Verify that NO orange lines appear when the trolley reaches section boundaries</li>
+            <li>Preview should be gold/yellow initially, then disappear when transition happens</li>
+        </ul>
+        <p><strong>Expected behavior:</strong> Preview lines should be gold/yellow and disappear completely when the
+            trolley transitions (no orange remnants)</p>
+    </div>
+
+    <div class="info">
+        <div>🚋 Trolley Position: <span id="position">0</span></div>
+        <div>📍 Current Track: <span id="currentTrack">3</span></div>
+        <div>🎯 Selected Track: <span id="selectedTrack">3</span></div>
+        <div>📊 Section Progress: <span id="sectionProgress">0%</span></div>
+        <div>🔍 Preview Status: <span id="previewStatus">None</span></div>
+    </div>
+
+    <div id="gameContainer"></div>
+
+    <div class="controls">
+        <h3>Track Selection:</h3>
+        <button id="track1" onclick="selectTrack(1)">Track 1</button>
+        <button id="track2" onclick="selectTrack(2)">Track 2</button>
+        <button id="track3" onclick="selectTrack(3)" class="active">Track 3</button>
+        <button id="track4" onclick="selectTrack(4)">Track 4</button>
+        <button id="track5" onclick="selectTrack(5)">Track 5</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from './node_modules/three/build/three.module.js';
+        import { GameEngine } from './dist/assets/index-e982980c.js';
+
+        let gameEngine;
+        let selectedTrack = 3;
+
+        // Initialize the game
+        async function initGame() {
+            try {
+                const container = document.getElementById('gameContainer');
+                gameEngine = new GameEngine(container);
+                await gameEngine.initialize();
+                gameEngine.start();
+
+                // Update UI every frame
+                function updateUI() {
+                    if (gameEngine && gameEngine.trolleyController) {
+                        const position = gameEngine.trolleyController.position;
+                        const currentTrack = gameEngine.trolleyController.currentTrack;
+
+                        document.getElementById('position').textContent = position.z.toFixed(1);
+                        document.getElementById('currentTrack').textContent = currentTrack;
+                        document.getElementById('selectedTrack').textContent = selectedTrack;
+
+                        // Calculate section progress
+                        if (gameEngine.trackGenerator) {
+                            const sectionProgress = gameEngine.trackGenerator.getSectionProgress(position);
+                            document.getElementById('sectionProgress').textContent = (sectionProgress * 100).toFixed(1) + '%';
+                        }
+
+                        // Check preview status
+                        if (gameEngine.inputManager) {
+                            const preview = gameEngine.inputManager.getCurrentPreview();
+                            const previewSystem = gameEngine.inputManager.getPathPreviewSystem();
+                            const activePaths = previewSystem.getActivePaths();
+
+                            if (activePaths.size > 0) {
+                                document.getElementById('previewStatus').textContent = `Active (${activePaths.size} paths)`;
+                            } else {
+                                document.getElementById('previewStatus').textContent = 'None';
+                            }
+                        }
+                    }
+                    requestAnimationFrame(updateUI);
+                }
+                updateUI();
+
+                console.log('Game initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize game:', error);
+                document.getElementById('gameContainer').innerHTML =
+                    '<div style="padding: 20px; color: red;">Failed to load game: ' + error.message + '</div>';
+            }
+        }
+
+        // Track selection function
+        window.selectTrack = function (trackNumber) {
+            selectedTrack = trackNumber;
+
+            // Update button states
+            document.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`track${trackNumber}`).classList.add('active');
+
+            // Select track in game
+            if (gameEngine && gameEngine.inputManager) {
+                gameEngine.inputManager.selectTrack(trackNumber);
+            }
+
+            console.log(`Selected track ${trackNumber}`);
+        };
+
+        // Start the game
+        initGame();
+    </script>
+</body>
+
+</html>

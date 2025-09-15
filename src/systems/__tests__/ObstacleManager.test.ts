@@ -313,9 +313,9 @@ describe('ObstacleManager', () => {
 
       expect(stats.totalObstacles).toBeGreaterThan(0);
       expect(stats.obstaclesByType).toBeDefined();
-      expect(stats.obstaclesBySegment).toBeDefined();
-      expect(stats.obstaclesBySegment[0]).toBeGreaterThan(0);
-      expect(stats.obstaclesBySegment[1]).toBeGreaterThan(0);
+      expect(stats.obstaclesBySection).toBeDefined();
+      // Both segments 0 and 1 are in section 0
+      expect(stats.obstaclesBySection[0]).toBeGreaterThan(0);
     });
 
     test('should count obstacles by type correctly', () => {
@@ -323,9 +323,9 @@ describe('ObstacleManager', () => {
       const rockObstacle = { type: 'rock' as ObstacleType } as Obstacle;
       const trolleyObstacle = { type: 'trolley' as ObstacleType } as Obstacle;
 
-      // Add mock obstacles to manager's internal map
-      (obstacleManager as any).obstacles.set('0_0', rockObstacle);
-      (obstacleManager as any).obstacles.set('0_1', trolleyObstacle);
+      // Add mock obstacles to manager's internal map using section-based keys
+      (obstacleManager as any).obstacles.set('section_0_track_0', rockObstacle);
+      (obstacleManager as any).obstacles.set('section_0_track_1', trolleyObstacle);
 
       const stats = obstacleManager.getObstacleStats();
 

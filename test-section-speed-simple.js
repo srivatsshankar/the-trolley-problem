@@ -23,8 +23,8 @@ console.log('\n--- Moving to first section boundary ---');
 trolleyController.setPosition(new THREE.Vector3(0, 0, sectionLength + 1));
 trolleyController.update(0.016);
 
-console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (expected: ${(DEFAULT_CONFIG.trolley.baseSpeed * 1.05).toFixed(2)})`);
-console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (expected: 1.05x)`);
+console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (expected: ${(DEFAULT_CONFIG.trolley.baseSpeed * 1.25).toFixed(2)})`);
+console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (expected: 1.25x)`);
 console.log(`- Sections passed: ${trolleyController.sectionsPassed} (expected: 1)`);
 
 // Move to second section boundary
@@ -32,8 +32,8 @@ console.log('\n--- Moving to second section boundary ---');
 trolleyController.setPosition(new THREE.Vector3(0, 0, sectionLength * 2 + 1));
 trolleyController.update(0.016);
 
-console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (expected: ${(DEFAULT_CONFIG.trolley.baseSpeed * Math.pow(1.05, 2)).toFixed(2)})`);
-console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (expected: 1.10x)`);
+console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (expected: ${(DEFAULT_CONFIG.trolley.baseSpeed * Math.pow(1.25, 2)).toFixed(2)})`);
+console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (expected: 1.56x)`);
 console.log(`- Sections passed: ${trolleyController.sectionsPassed} (expected: 2)`);
 
 // Move to third section boundary
@@ -41,18 +41,18 @@ console.log('\n--- Moving to third section boundary ---');
 trolleyController.setPosition(new THREE.Vector3(0, 0, sectionLength * 3 + 1));
 trolleyController.update(0.016);
 
-console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (expected: ${(DEFAULT_CONFIG.trolley.baseSpeed * Math.pow(1.05, 3)).toFixed(2)})`);
-console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (expected: 1.16x)`);
+console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (expected: ${(DEFAULT_CONFIG.trolley.baseSpeed * Math.pow(1.25, 3)).toFixed(2)})`);
+console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (expected: 1.95x)`);
 console.log(`- Sections passed: ${trolleyController.sectionsPassed} (expected: 3)`);
 
-// Test that it caps at 5x base speed
-console.log('\n--- Testing speed cap at 5x base speed ---');
+// Test that it caps at 7x base speed
+console.log('\n--- Testing speed cap at 7x base speed ---');
 for (let i = 0; i < 50; i++) {
   trolleyController.increaseSectionSpeed();
 }
 
-console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (should be capped at ${(DEFAULT_CONFIG.trolley.baseSpeed * 5).toFixed(2)})`);
-console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (should be capped at 5.00x)`);
+console.log(`- Speed: ${trolleyController.speed.toFixed(2)} (should be capped at ${(DEFAULT_CONFIG.trolley.baseSpeed * 7).toFixed(2)})`);
+console.log(`- Speed multiplier: ${trolleyController.getSpeedMultiplier().toFixed(2)}x (should be capped at 7.00x)`);
 console.log(`- Sections passed: ${trolleyController.sectionsPassed}`);
 
 // Test reset

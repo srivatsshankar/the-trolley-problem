@@ -117,9 +117,9 @@ export class Obstacle {
    * Create rock geometry with boulder-like irregular shape
    */
   private createRockGeometry(): THREE.BufferGeometry {
-    // Create a larger, more boulder-like base shape
-    const baseRadius = Math.max(this.config.size.width, this.config.size.height) / 1.8;
-    const geometry = new THREE.SphereGeometry(baseRadius, 16, 12);
+    // Create a more prominent, boulder-like base shape
+    const baseRadius = Math.max(this.config.size.width, this.config.size.height) / 1.5; // Increased from 1.8
+    const geometry = new THREE.SphereGeometry(baseRadius, 20, 16); // More segments for better shape
 
     // Modify vertices to create more dramatic boulder-like irregularities
     const positions = geometry.attributes.position;
@@ -129,17 +129,17 @@ export class Obstacle {
       vertex.fromBufferAttribute(positions, i);
 
       // Create more dramatic variations for boulder appearance
-      const variation = 0.5; // Increased variation
+      const variation = 0.6; // Increased variation for more irregular shape
       const randomFactor = Math.random();
 
       // Add some vertices that stick out more (like boulder protrusions)
-      if (randomFactor > 0.7) {
-        vertex.multiplyScalar(1.2 + Math.random() * 0.3);
+      if (randomFactor > 0.6) {
+        vertex.multiplyScalar(1.3 + Math.random() * 0.4);
       }
 
-      // Add general irregularity
+      // Add general irregularity with more variation
       vertex.x += (Math.random() - 0.5) * variation;
-      vertex.y += (Math.random() - 0.5) * variation * 0.8; // Less variation on Y to keep it grounded
+      vertex.y += Math.abs((Math.random() - 0.5) * variation * 0.6); // Keep rocks taller, not shorter
       vertex.z += (Math.random() - 0.5) * variation;
 
       positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
@@ -511,12 +511,12 @@ export class Obstacle {
 export const DEFAULT_OBSTACLE_CONFIGS = {
   rock: {
     size: {
-      width: 1.2,  // Larger boulder size
-      height: 1.0, // Taller boulder
-      length: 1.2  // Larger boulder size
+      width: 1.8,  // Increased from 1.2 for better visibility
+      height: 1.5, // Increased from 1.0 for better visibility
+      length: 1.8  // Increased from 1.2 for better visibility
     },
     colors: {
-      primary: 0x8B7355 // More realistic boulder color (brownish-grey)
+      primary: 0x654321 // Changed to a more distinctive brown color
     }
   },
   trolley: {

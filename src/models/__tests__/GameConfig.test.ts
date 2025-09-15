@@ -16,11 +16,11 @@ describe('GameConfig', () => {
       expect(config.tracks.width).toBe(2.0);
       expect(config.tracks.segmentLength).toBe(25.0);
       
-      expect(config.trolley.baseSpeed).toBe(5.0);
-      expect(config.trolley.speedIncrease).toBe(0.03); // 3% (Requirement 7.1)
-      expect(config.trolley.maxSpeedMultiplier).toBe(5.0); // 5x (Requirement 7.4)
+      expect(config.trolley.baseSpeed).toBe(7.0);
+      expect(config.trolley.speedIncrease).toBe(0.0103); // 1.03% (Requirement 7.1)
+      expect(config.trolley.maxSpeedMultiplier).toBe(7.0); // 7x (Requirement 7.4)
       
-      expect(config.difficulty.barrierIncreaseThreshold).toBe(5.0); // 5x speed (Requirement 6.5)
+      expect(config.difficulty.barrierIncreaseThreshold).toBe(7.0); // 7x speed (Requirement 6.5)
       expect(config.difficulty.highSpeedMinBarriers).toBe(2);
       expect(config.difficulty.highSpeedMaxBarriers).toBe(4);
     });
@@ -33,7 +33,7 @@ describe('GameConfig', () => {
       expect(config1).toEqual(config2); // Same content
       
       config1.trolley.baseSpeed = 999;
-      expect(configManager.getConfig().trolley.baseSpeed).toBe(5.0); // Unchanged
+      expect(configManager.getConfig().trolley.baseSpeed).toBe(7.0); // Unchanged
     });
   });
 
@@ -49,7 +49,7 @@ describe('GameConfig', () => {
       const config = configManager.getConfig();
       expect(config.trolley.baseSpeed).toBe(10.0);
       expect(config.trolley.speedIncrease).toBe(0.05);
-      expect(config.trolley.maxSpeedMultiplier).toBe(5.0); // Should remain unchanged
+      expect(config.trolley.maxSpeedMultiplier).toBe(7.0); // Should remain unchanged
     });
 
     test('should merge nested configuration updates', () => {
@@ -99,9 +99,9 @@ describe('GameConfig', () => {
 
   describe('High Speed Mode Detection', () => {
     test('should detect high speed mode correctly', () => {
-      // Requirement 7.4: High speed mode at 5x base speed
-      const baseSpeed = 5.0;
-      const threshold = 5.0; // 5x multiplier
+      // Requirement 7.4: High speed mode at 7x base speed
+      const baseSpeed = 7.0;
+      const threshold = 7.0; // 7x multiplier
       const speedIncrease = 0.03;
       
       // Calculate segment where speed reaches 5x base speed
@@ -230,9 +230,9 @@ describe('GameConfig', () => {
       const json = configManager.exportToJSON();
       const parsed = JSON.parse(json);
       
-      expect(parsed.trolley.baseSpeed).toBe(5.0);
-      expect(parsed.trolley.speedIncrease).toBe(0.03);
-      expect(parsed.difficulty.barrierIncreaseThreshold).toBe(5.0);
+      expect(parsed.trolley.baseSpeed).toBe(7.0);
+      expect(parsed.trolley.speedIncrease).toBe(0.0103);
+      expect(parsed.difficulty.barrierIncreaseThreshold).toBe(7.0);
     });
 
     test('should load configuration from JSON', () => {
@@ -252,7 +252,7 @@ describe('GameConfig', () => {
       expect(config.trolley.baseSpeed).toBe(8.0);
       expect(config.trolley.speedIncrease).toBe(0.04);
       expect(config.difficulty.maxPeoplePerTrack).toBe(7);
-      expect(config.trolley.maxSpeedMultiplier).toBe(5.0); // Should remain default
+      expect(config.trolley.maxSpeedMultiplier).toBe(7.0); // Should remain default
     });
 
     test('should handle invalid JSON gracefully', () => {

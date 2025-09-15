@@ -45,7 +45,6 @@ export class PathPreviewSystem {
   
   // Materials for different states
   private translucentMaterial!: THREE.MeshLambertMaterial;
-  private opaqueMaterial!: THREE.MeshLambertMaterial;
   private glowMaterial!: THREE.MeshLambertMaterial;
   
   // Animation properties
@@ -92,14 +91,7 @@ export class PathPreviewSystem {
       emissiveIntensity: 0.2
     });
     
-    // Opaque material for confirmed paths
-    this.opaqueMaterial = new THREE.MeshLambertMaterial({
-      color: 0xFFA500, // Orange color
-      transparent: false,
-      opacity: this.config.opaqueOpacity,
-      emissive: 0x441100,
-      emissiveIntensity: 0.3
-    });
+
     
     // Glowing material for active selection
     this.glowMaterial = new THREE.MeshLambertMaterial({
@@ -188,20 +180,10 @@ export class PathPreviewSystem {
       return;
     }
     
-    // Update curved track to opaque orange colors
-    path.curvedTrack.updateColors(0xFFA500, 0xFF8C00); // Orange colors for confirmed path
-    path.curvedTrack.group.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        const material = child.material as THREE.Material;
-        material.transparent = false;
-        material.opacity = this.config.opaqueOpacity;
-      }
-    });
+    // Instead of making it orange, just remove the preview since the transition is happening
+    this.removePathPreview(pathKey);
     
-    path.isTranslucent = false;
-    path.opacity = this.config.opaqueOpacity;
-    
-    console.log(`[PathPreviewSystem] Made curved railway path opaque for track ${trackNumber}, segment ${segmentIndex}`);
+    console.log(`[PathPreviewSystem] Removed path preview for active transition on track ${trackNumber}, segment ${segmentIndex}`);
   }
   
   /**
@@ -242,12 +224,12 @@ export class PathPreviewSystem {
     
     // Simulate the exact curve the trolley will create when it transitions
     // Use the same parameters as TrolleyController.switchToTrack()
-    const trolleySpeed = Math.max(this.trolleyController.speed, this.trolleyController.baseSpeed);
     const transitionDuration = 1.0; // Same as TrolleyController._transitionDuration
     
-    // The trolley's curve starts at the boundary and extends forward based on speed × duration
+    // Use fixed curve length regardless of speed to prevent long curves at high speeds
+    const fixedCurveLength = this.trolleyController.baseSpeed * transitionDuration;
     const startZ = nextSectionBoundaryZ;
-    const endZ = nextSectionBoundaryZ + trolleySpeed * transitionDuration;
+    const endZ = nextSectionBoundaryZ + fixedCurveLength;
     
     // Use the exact same curve generation method as TrolleyController
     const curve = CurvedRailwayTrack.createTrackTransition(
@@ -302,20 +284,8 @@ export class PathPreviewSystem {
           }
         }
       });
-    } else {
-      // Animate opaque paths with subtle glow variation
-      const glowIntensity = 0.8 + 0.2 * Math.sin(path.animationPhase * 0.5);
-      
-      // Update materials for subtle animation
-      path.curvedTrack.group.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          const material = child.material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial;
-          if ('emissiveIntensity' in material) {
-            material.emissiveIntensity = glowIntensity * 0.1;
-          }
-        }
-      });
     }
+    // Note: Opaque paths are now removed instead of animated
   }
   
   /**
@@ -335,14 +305,14 @@ export class PathPreviewSystem {
       visibilityFactor = Math.max(0.1, 1.0 - (segmentDistance - 2) * 0.3);
     }
     
-    // Update material opacity on all components
-    const baseOpacity = path.isTranslucent ? this.config.translucentOpacity : this.config.opaqueOpacity;
+    // Update material opacity on all components (all paths are translucent now)
+    const baseOpacity = this.config.translucentOpacity;
     const targetOpacity = baseOpacity * visibilityFactor;
     
     path.curvedTrack.group.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
         const material = child.material as THREE.Material;
-        if (material.transparent || path.isTranslucent) {
+        if (material.transparent) {
           material.opacity = targetOpacity;
         }
       }
@@ -474,9 +444,6 @@ export class PathPreviewSystem {
     if (newConfig.translucentOpacity !== undefined) {
       this.translucentMaterial.opacity = this.config.translucentOpacity;
     }
-    if (newConfig.opaqueOpacity !== undefined) {
-      this.opaqueMaterial.opacity = this.config.opaqueOpacity;
-    }
   }
 
   /**
@@ -547,7 +514,6 @@ export class PathPreviewSystem {
     
     // Dispose of materials
     this.translucentMaterial.dispose();
-    this.opaqueMaterial.dispose();
     this.glowMaterial.dispose();
     
     console.log('[PathPreviewSystem] Disposed');

@@ -50,13 +50,13 @@ export const DEFAULT_CONFIG: GameConfig = {
   trolley: {
     baseSpeed: 7.0,
   speedIncrease: 0.0103, // 1.03% increase per segment (Requirement 7.1)
-    maxSpeedMultiplier: 5.0 // 5x base speed threshold (Requirement 7.4)
+    maxSpeedMultiplier: 7.0 // 7x base speed threshold (Requirement 7.4)
   },
   difficulty: {
     minPeoplePerTrack: 1,
     maxPeoplePerTrack: 5,
     guaranteedSinglePersonTrack: true,
-    barrierIncreaseThreshold: 5.0, // 5x base speed (Requirement 6.5)
+    barrierIncreaseThreshold: 7.0, // 7x base speed (Requirement 6.5)
     highSpeedMinBarriers: 2,
     highSpeedMaxBarriers: 4
   },

@@ -545,31 +545,11 @@ export class VisualEffectsSystem {
    * Update speed indicators
    * Requirement 5.4: Visual indicators for speed increases
    */
-  private updateSpeedIndicators(deltaTime: number): void {
-    const speedMultiplier = this.trolleyController.getSpeedMultiplier();
-    const shouldShowIndicators = speedMultiplier >= this.config.speedIndicatorThreshold;
-    
+  private updateSpeedIndicators(_deltaTime: number): void {
+    // Disabled: Hide all speed indicators (yellow rings)
     this.speedIndicators.forEach((indicator, _index) => {
-      indicator.isActive = shouldShowIndicators;
-      indicator.mesh.visible = shouldShowIndicators;
-      
-      if (shouldShowIndicators) {
-        // Position around trolley
-        const trolleyPos = this.trolleyController.position;
-        indicator.mesh.position.copy(trolleyPos);
-        indicator.mesh.position.y += 0.1;
-        
-        // Animate pulsing effect
-        indicator.pulsePhase += deltaTime * 3;
-        const pulseScale = 1 + Math.sin(indicator.pulsePhase) * 0.2;
-        indicator.mesh.scale.copy(indicator.originalScale).multiplyScalar(pulseScale);
-        
-        // Update color based on speed
-        const material = indicator.mesh.material as THREE.MeshBasicMaterial;
-        const intensity = Math.min(speedMultiplier / 5, 1);
-        material.color.setRGB(intensity, 1 - intensity * 0.5, 0);
-        material.opacity = 0.3 + intensity * 0.3;
-      }
+      indicator.isActive = false;
+      indicator.mesh.visible = false;
     });
   }
   
@@ -577,31 +557,11 @@ export class VisualEffectsSystem {
    * Update difficulty indicator
    * Requirement 5.4: Visual indicators for difficulty changes
    */
-  private updateDifficultyIndicator(deltaTime: number): void {
+  private updateDifficultyIndicator(_deltaTime: number): void {
     if (!this.difficultyIndicator) return;
     
-    const speedMultiplier = this.trolleyController.getSpeedMultiplier();
-    const isHighDifficulty = speedMultiplier >= this.config.difficultyIndicatorThreshold;
-    
-    this.difficultyIndicator.visible = isHighDifficulty;
-    
-    if (isHighDifficulty) {
-      // Position above trolley
-      const trolleyPos = this.trolleyController.position;
-      this.difficultyIndicator.position.copy(trolleyPos);
-      this.difficultyIndicator.position.y += 3;
-      
-      // Animate rotation and pulsing
-      this.difficultyIndicator.rotation.y += deltaTime * 2;
-      
-      const pulseScale = 1 + Math.sin(this.animationTime * 4) * 0.3;
-      this.difficultyIndicator.scale.setScalar(pulseScale);
-      
-      // Update color intensity
-      const material = this.difficultyIndicator.material as THREE.MeshBasicMaterial;
-      const intensity = 0.7 + Math.sin(this.animationTime * 6) * 0.3;
-      material.opacity = intensity;
-    }
+    // Disabled: Hide the difficulty indicator (red arrow)
+    this.difficultyIndicator.visible = false;
   }
   
   /**

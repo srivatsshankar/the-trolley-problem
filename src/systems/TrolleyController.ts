@@ -241,7 +241,9 @@ export class TrolleyController {
       const startX = this.trackPositions[this._currentTrack - 1];
       const endX = this.trackPositions[trackNumber - 1];
       const startZ = this._position.z;
-      const endZ = startZ + Math.max(this._speed, this._baseSpeed) * this._transitionDuration;
+      // Use fixed curve length regardless of speed to prevent long curves at high speeds
+      const fixedCurveLength = this._baseSpeed * this._transitionDuration; // Always use base speed for curve length
+      const endZ = startZ + fixedCurveLength;
       this.transitionStartZ = startZ;
       this.transitionEndZ = endZ;
       
@@ -254,7 +256,7 @@ export class TrolleyController {
         0.05 // Slight elevation for smooth transition
       );
       
-      console.log(`[TrolleyController] Created actual transition curve: Track ${this._currentTrack}->${trackNumber}, X=${startX.toFixed(1)}->${endX.toFixed(1)}, Z=${startZ.toFixed(1)}->${endZ.toFixed(1)} (speed=${Math.max(this._speed, this._baseSpeed).toFixed(1)}, duration=${this._transitionDuration})`);
+      console.log(`[TrolleyController] Created actual transition curve: Track ${this._currentTrack}->${trackNumber}, X=${startX.toFixed(1)}->${endX.toFixed(1)}, Z=${startZ.toFixed(1)}->${endZ.toFixed(1)} (fixed curve length=${fixedCurveLength.toFixed(1)}, current speed=${this._speed.toFixed(1)}, duration=${this._transitionDuration})`);
       
       // Notify listeners to render a temporary connector
       this.onTransitionStartCb?.(this.transitionCurve);
@@ -267,13 +269,13 @@ export class TrolleyController {
   }
   
   /**
-   * Increase speed by 10% per section (updated requirement)
-   * Trolley gets 10% faster after every section, capped at 5x base speed
+   * Increase speed by 25% per section (updated requirement)
+   * Trolley gets 25% faster after every section, capped at 7x base speed
    */
   public increaseSectionSpeed(): void {
     this._sectionsPassed++;
-    // 10% increase per section: 1.10^sections, capped at 5x base speed
-    const rawMultiplier = Math.pow(1.10, this._sectionsPassed);
+    // 25% increase per section: 1.25^sections, capped at 7x base speed
+    const rawMultiplier = Math.pow(1.25, this._sectionsPassed);
     const clampedMultiplier = Math.min(this.config.trolley.maxSpeedMultiplier, rawMultiplier);
     this._speed = this._baseSpeed * clampedMultiplier;
     

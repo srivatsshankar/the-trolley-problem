@@ -19,8 +19,8 @@ describe('TrolleyController', () => {
 
   describe('Initialization', () => {
     it('should initialize with correct default values', () => {
-      expect(trolleyController.currentTrack).toBe(1);
-      expect(trolleyController.targetTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
+      expect(trolleyController.targetTrack).toBe(3);
       expect(trolleyController.speed).toBe(config.trolley.baseSpeed);
       expect(trolleyController.baseSpeed).toBe(config.trolley.baseSpeed);
       expect(trolleyController.segmentsPassed).toBe(0);
@@ -106,9 +106,9 @@ describe('TrolleyController', () => {
     });
 
     it('should not start transition if already on target track', () => {
-      expect(trolleyController.currentTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
       
-      trolleyController.switchToTrack(1);
+      trolleyController.switchToTrack(3);
       
       expect(trolleyController.isTransitioning).toBe(false);
     });
@@ -219,7 +219,7 @@ describe('TrolleyController', () => {
       
       const state = trolleyController.getState();
       
-      expect(state.currentTrack).toBe(1);
+      expect(state.currentTrack).toBe(3);
       expect(state.targetTrack).toBe(4);
       expect(state.speed).toBeGreaterThan(config.trolley.baseSpeed);
       expect(state.isTransitioning).toBe(true);
@@ -237,8 +237,8 @@ describe('TrolleyController', () => {
       // Reset
       trolleyController.reset();
       
-      expect(trolleyController.currentTrack).toBe(1);
-      expect(trolleyController.targetTrack).toBe(1);
+      expect(trolleyController.currentTrack).toBe(3);
+      expect(trolleyController.targetTrack).toBe(3);
       expect(trolleyController.speed).toBe(config.trolley.baseSpeed);
       expect(trolleyController.segmentsPassed).toBe(0);
       expect(trolleyController.isTransitioning).toBe(false);
@@ -263,11 +263,11 @@ describe('TrolleyController', () => {
 
   describe('Track Position Utilities', () => {
     it('should return correct track position for valid track numbers', () => {
-      expect(trolleyController.getTrackPosition(1)).toBe(-4);
-      expect(trolleyController.getTrackPosition(2)).toBe(-2);
+      expect(trolleyController.getTrackPosition(1)).toBe(-8);
+      expect(trolleyController.getTrackPosition(2)).toBe(-4);
       expect(trolleyController.getTrackPosition(3)).toBe(0);
-      expect(trolleyController.getTrackPosition(4)).toBe(2);
-      expect(trolleyController.getTrackPosition(5)).toBe(4);
+      expect(trolleyController.getTrackPosition(4)).toBe(4);
+      expect(trolleyController.getTrackPosition(5)).toBe(8);
     });
 
     it('should throw error for invalid track numbers', () => {
@@ -312,7 +312,7 @@ describe('TrolleyController', () => {
       trolleyController.setMesh(mockMesh);
       trolleyController.reset();
       
-      expect(mockMesh.position.x).toBe(-4); // Track 1 position
+      expect(mockMesh.position.x).toBe(0); // Track 3 position
       expect(mockMesh.position.y).toBe(0);
       expect(mockMesh.position.z).toBe(2); // Start on the first track segment
     });

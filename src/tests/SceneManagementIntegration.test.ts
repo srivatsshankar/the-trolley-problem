@@ -147,12 +147,12 @@ describe('Scene Management Integration Tests', () => {
       trolley: {
         baseSpeed: 5.0,
         speedIncrease: 0.03,
-        maxSpeedMultiplier: 5.0,
+        maxSpeedMultiplier: 7.0,
       },
       difficulty: {
         minPeoplePerTrack: 1,
         maxPeoplePerTrack: 5,
-        barrierIncreaseThreshold: 5.0,
+        barrierIncreaseThreshold: 7.0,
       },
       rendering: {
         viewDistance: 50.0,

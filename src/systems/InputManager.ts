@@ -13,14 +13,13 @@ import { GameState } from '../models/GameState';
 import { PathPreviewSystem, createPathPreviewSystem } from './PathPreviewSystem';
 // Removed unused CurvedTrackSystem and SegmentTransitionSystem (no queue needed)
 import * as THREE from 'three';
-import { CurvedRailwayTrack } from '../models/CurvedRailwayTrack';
+
 
 export interface PathPreview {
   trackNumber: number;
   segmentIndex: number;
   isVisible: boolean;
   opacity: number;
-  mesh?: THREE.Mesh;
 }
 
 export class InputManager {
@@ -29,7 +28,7 @@ export class InputManager {
   private trolleyController: TrolleyController;
   private gameConfig: GameConfig;
   private gameState: GameState;
-  private scene: THREE.Scene;
+
 
   // Section-based state tracking (sections are 2.5x railway portions)
   private lastProcessedSection: number = -1;
@@ -44,7 +43,6 @@ export class InputManager {
 
   // Single preview for the current transition
   private currentPreview: PathPreview | null = null;
-  private previewMaterial: THREE.Material;
 
 
 
@@ -59,7 +57,6 @@ export class InputManager {
     gameConfig: GameConfig,
     gameState?: GameState
   ) {
-    this.scene = scene;
     this.trolleyController = trolleyController;
     this.trackGenerator = trackGenerator;
     this.gameConfig = gameConfig;
@@ -76,12 +73,7 @@ export class InputManager {
 
 
 
-    // Create material for path preview
-    this.previewMaterial = new THREE.MeshLambertMaterial({
-      color: 0xffff00, // Yellow for preview
-      transparent: true,
-      opacity: 0.6
-    });
+
 
     this.setupEventHandlers();
 
@@ -168,69 +160,18 @@ export class InputManager {
     // Use enhanced path preview system
     this.pathPreviewSystem.createPathPreview(trackNumber, segmentIndex);
 
-    // Create preview for the exact location where trolley will transition
-    const preview = this.createPathPreviewAtBoundary(trackNumber, nextSectionBoundaryZ);
-    this.currentPreview = preview;
-
-    if (preview.mesh) {
-      this.scene.add(preview.mesh);
-    }
+    // Store preview info for tracking
+    this.currentPreview = {
+      trackNumber,
+      segmentIndex,
+      isVisible: true,
+      opacity: 0.4
+    };
 
     console.log(`[InputManager] Created preview for track ${trackNumber} at next section boundary Z=${nextSectionBoundaryZ}`);
   }
 
-  /**
-   * Create curved path preview mesh that matches the exact shape the trolley will follow
-   */
-  private createPathPreviewAtBoundary(trackNumber: number, boundaryZ: number): PathPreview {
-    // Get current and target track positions
-    const currentTrack = this.trolleyController.currentTrack;
-    const currentX = this.trolleyController.getTrackPosition(currentTrack);
-    const targetX = this.trolleyController.getTrackPosition(trackNumber);
 
-    // Simulate the exact curve the trolley will create when it transitions
-    // The trolley creates its curve when it reaches the boundary, using its current speed and transition duration
-    const trolleySpeed = Math.max(this.trolleyController.speed, this.trolleyController.baseSpeed);
-    const transitionDuration = 1.0; // Same as TrolleyController._transitionDuration
-    
-    // The trolley's curve will start at the boundary and extend forward based on speed × duration
-    const startZ = boundaryZ;
-    const endZ = boundaryZ + trolleySpeed * transitionDuration;
-
-    // Use the exact same curve generation method as TrolleyController
-    const curve = CurvedRailwayTrack.createTrackTransition(
-      currentX,
-      targetX,
-      startZ,
-      endZ,
-      0.05 // Same elevation as TrolleyController (0.05)
-    );
-
-    // Create tube geometry that matches the visual style
-    const tubeGeometry = new THREE.TubeGeometry(curve, 32, 0.1, 8, false);
-    const mesh = new THREE.Mesh(tubeGeometry, this.previewMaterial.clone());
-
-    // Store creation parameters for future comparison
-    mesh.userData = {
-      creationSpeed: trolleySpeed,
-      creationTime: Date.now(),
-      trackTransition: `${currentTrack}->${trackNumber}`
-    };
-
-    // Calculate segment index for tracking
-    const segmentLength = this.gameConfig.tracks.segmentLength;
-    const segmentIndex = Math.floor(boundaryZ / segmentLength);
-
-    console.log(`[InputManager] Created preview curve: Track ${currentTrack}->${trackNumber}, X=${currentX.toFixed(1)}->${targetX.toFixed(1)}, Z=${startZ.toFixed(1)}->${endZ.toFixed(1)} (speed=${trolleySpeed.toFixed(1)}, duration=${transitionDuration})`);
-
-    return {
-      trackNumber,
-      segmentIndex,
-      isVisible: true,
-      opacity: 0.4,
-      mesh
-    };
-  }
 
   /**
    * Update input system - called each frame
@@ -296,18 +237,8 @@ export class InputManager {
    * Since curve shape depends on trolley speed, we need to update when speed changes significantly
    */
   private shouldRecreatePreviewForSpeedChange(): boolean {
-    if (!this.currentPreview) return false;
-    
-    // Store the speed used to create the current preview
-    if (!this.currentPreview.mesh?.userData.creationSpeed) {
-      return true; // No speed stored, recreate
-    }
-    
-    const currentSpeed = Math.max(this.trolleyController.speed, this.trolleyController.baseSpeed);
-    const creationSpeed = this.currentPreview.mesh.userData.creationSpeed;
-    const speedChangeThreshold = 0.2; // 20% change threshold
-    
-    return Math.abs(currentSpeed - creationSpeed) / creationSpeed > speedChangeThreshold;
+    // PathPreviewSystem handles speed changes internally
+    return false;
   }
 
   /**
@@ -315,7 +246,7 @@ export class InputManager {
    * Yellow when in first 50% of section, Orange when in final 50%
    */
   private updatePreviewColor(sectionProgress: number): void {
-    if (!this.currentPreview || !this.currentPreview.mesh) return;
+    if (!this.currentPreview) return;
 
     let previewColor: number;
     let previewOpacity: number;
@@ -330,14 +261,7 @@ export class InputManager {
       previewOpacity = 0.6;
     }
 
-    // Update the preview material color and opacity
-    const material = this.currentPreview.mesh.material as THREE.Material;
-    if ('color' in material) {
-      (material as any).color.setHex(previewColor);
-    }
-    material.opacity = previewOpacity;
-
-    // Also update the enhanced path preview system
+    // Update the enhanced path preview system
     this.pathPreviewSystem.updatePreviewColor(this.currentSelectedTrack, previewColor, previewOpacity);
   }
 
@@ -382,17 +306,9 @@ export class InputManager {
    * Make the current preview solid to indicate the trolley is transitioning onto it
    */
   private makePreviewSolid(): void {
-    if (!this.currentPreview || !this.currentPreview.mesh) return;
+    if (!this.currentPreview) return;
 
-    // Change to solid green color to indicate active transition
-    const material = this.currentPreview.mesh.material as THREE.Material;
-    if ('color' in material) {
-      (material as any).color.setHex(0x00FF00); // Bright green for active transition
-    }
-    material.transparent = false;
-    material.opacity = 1.0;
-
-    // Also update the enhanced path preview system
+    // Update the enhanced path preview system to make it opaque
     this.pathPreviewSystem.makePathOpaque(this.currentPreview.trackNumber, this.currentPreview.segmentIndex);
     
     console.log(`[InputManager] Made preview solid for active transition`);
@@ -408,17 +324,6 @@ export class InputManager {
 
     // Clear enhanced path preview system
     this.pathPreviewSystem.clearAllPaths();
-
-    // Clear current preview
-    if (this.currentPreview.mesh) {
-      this.scene.remove(this.currentPreview.mesh);
-      this.currentPreview.mesh.geometry.dispose();
-      if (Array.isArray(this.currentPreview.mesh.material)) {
-        this.currentPreview.mesh.material.forEach(mat => mat.dispose());
-      } else {
-        this.currentPreview.mesh.material.dispose();
-      }
-    }
 
     this.currentPreview = null;
   }
@@ -527,9 +432,6 @@ export class InputManager {
 
     // Dispose of enhanced path preview system
     this.pathPreviewSystem.dispose();
-
-    // Dispose of material
-    this.previewMaterial.dispose();
 
     // Clear current preview
     this.clearCurrentPreview();
