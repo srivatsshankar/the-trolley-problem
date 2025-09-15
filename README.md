@@ -2,6 +2,8 @@
 
 A 3D browser-based trolley problem game built with Three.js that challenges players to navigate a trolley through multiple tracks while avoiding hitting people and obstacles.
 
+If you would just like to play the game you can find it at [itch.io](https://deuteriumexoplanet.itch.io/trolley-problem)
+
 ## Project Structure
 
 ```
