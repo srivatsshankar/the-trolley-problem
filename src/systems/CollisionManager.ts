@@ -100,7 +100,7 @@ export class CollisionManager {
 
     // Process each collision
     for (const collision of collisions) {
-      this.processIndividualCollision(collision);
+      this.processIndividualCollision(collision, trolleyController);
     }
 
     // Update game state with collision results
@@ -112,9 +112,9 @@ export class CollisionManager {
   /**
    * Process an individual collision
    */
-  private processIndividualCollision(collision: CollisionResult): void {
+  private processIndividualCollision(collision: CollisionResult, trolleyController?: TrolleyController): void {
     if (collision.type === 'obstacle') {
-      this.handleObstacleCollision(collision);
+      this.handleObstacleCollision(collision, trolleyController);
     } else if (collision.type === 'person') {
       this.handlePersonCollision(collision);
     }
@@ -125,21 +125,33 @@ export class CollisionManager {
    * Requirement 8.4: Track whether trolley hit a barrier
    * Requirement 9.3: End game when hitting barrier
    */
-  private handleObstacleCollision(collision: CollisionResult): void {
+  private handleObstacleCollision(collision: CollisionResult, trolleyController?: TrolleyController): void {
     this.currentSegmentCollisions.obstaclesHit++;
-    this.currentSegmentCollisions.gameEnded = true;
 
-    // Start crash animation if crash system is available
-    if (this.crashSystem) {
-      this.crashSystem.startCrashAnimation(this.onCrashComplete);
+    // Check if bounce is enabled and trolley controller is available
+    if (trolleyController && typeof trolleyController.startBounce === 'function') {
+      // Start bounce animation instead of immediate crash
+      trolleyController.startBounce();
+      console.log('Obstacle collision detected - Starting bounce animation!');
+      
+      // Don't end the game immediately, let the bounce complete first
+      // The game will end after bounce animation if configured to do so
+    } else {
+      // Fallback to immediate crash if bounce not available
+      this.currentSegmentCollisions.gameEnded = true;
+      
+      // Start crash animation if crash system is available
+      if (this.crashSystem) {
+        this.crashSystem.startCrashAnimation(this.onCrashComplete);
+      }
+      
+      console.log('Obstacle collision detected - Starting crash animation!');
     }
 
     // Show visual effect if enabled
     if (this.config.enableVisualEffects && this.collisionEffects) {
       this.collisionEffects.showObstacleCollisionEffect(collision.position);
     }
-
-    console.log('Obstacle collision detected - Starting crash animation!');
   }
 
   /**

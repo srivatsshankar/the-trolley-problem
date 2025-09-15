@@ -1,0 +1,32 @@
+{
+  "enabled": true,
+  "name": "Library GitIgnore Guard",
+  "description": "Monitors for common library directories and package files to ensure they are added to .gitignore and not tracked in git",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "node_modules/**",
+      "vendor/**",
+      "packages/**",
+      "lib/**",
+      "libs/**",
+      "dependencies/**",
+      "package.json",
+      "composer.json",
+      "requirements.txt",
+      "Gemfile",
+      "pom.xml",
+      "build.gradle",
+      "*.csproj",
+      "*.fsproj",
+      "*.vbproj",
+      "go.mod",
+      "Cargo.toml"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A package file or library directory has been detected. Check if common library directories (node_modules, vendor, packages, lib, etc.) are properly listed in .gitignore. If .gitignore doesn't exist or is missing these entries, create or update it to include standard library/dependency directories for the detected project type. Ensure no library files are currently tracked in git and suggest removing them if they are."
+  }
+}

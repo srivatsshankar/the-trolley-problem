@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Agent Response Complete",
+  "description": "Triggers a notification when the agent has finished processing a prompt to inform the user to check their codebase",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "The prompt has been processed. Throw a notification to let the user know that the prompt has been processed. If a file has been saved by the user directly, do not do anything. Do not make any changes to any of the files."
+  }
+}

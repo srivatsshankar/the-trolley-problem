@@ -38,6 +38,12 @@ export class TrolleyController {
   private _lastSpeedSectionIndex: number;
   private _rockingBoostEnabled: boolean = false;
   
+  // Bounce state
+  private _isBouncing: boolean = false;
+  private _bounceStartTime: number = 0;
+  private _bounceStartPosition: number = 0;
+  private _bounceDirection: number = 0; // -1 for backward bounce
+  
   private config: GameConfig;
   private mesh?: THREE.Object3D;
   private trolley?: Trolley;
@@ -106,9 +112,14 @@ export class TrolleyController {
    * Requirement 7.2: Continuous forward movement along tracks
    */
   public update(deltaTime: number): void {
-    // Update forward movement (Z-axis movement)
-    // We always advance Z linearly by speed; during transitions, X follows a curve
-    this._position.z += this._speed * deltaTime;
+    // Handle bounce animation if active
+    if (this._isBouncing) {
+      this.updateBounceAnimation(deltaTime);
+    } else {
+      // Update forward movement (Z-axis movement)
+      // We always advance Z linearly by speed; during transitions, X follows a curve
+      this._position.z += this._speed * deltaTime;
+    }
     
     // Handle track switching animation
     if (this._isTransitioning) {
@@ -210,7 +221,72 @@ export class TrolleyController {
     // Smooth step function: 3t² - 2t³
     return t * t * (3 - 2 * t);
   }
+
+  /**
+   * Update bounce animation when trolley hits a barrier
+   */
+  private updateBounceAnimation(deltaTime: number): void {
+    const currentTime = Date.now() * 0.001;
+    const elapsedTime = currentTime - this._bounceStartTime;
+    const bounceConfig = this.config.effects.bounceOnBarrierHit;
+    const bounceDuration = bounceConfig.duration * 0.001; // Convert ms to seconds
+
+    if (elapsedTime >= bounceDuration) {
+      // Bounce complete, stop bouncing and resume normal movement
+      this._isBouncing = false;
+      this._speed = this._baseSpeed * 0.5; // Resume at reduced speed
+      console.log('[TrolleyController] Bounce animation complete, resuming movement');
+      return;
+    }
+
+    // Calculate bounce progress (0 to 1)
+    const progress = elapsedTime / bounceDuration;
+    
+    // Use a sine wave for smooth bounce back and forth
+    const bounceIntensity = Math.sin(progress * Math.PI);
+    const bounceDistance = bounceConfig.force * bounceIntensity;
+    
+    // Apply bounce movement (backward from collision point)
+    this._position.z = this._bounceStartPosition + (this._bounceDirection * bounceDistance);
+    
+    // Keep trolley upright during bounce (no rotation changes)
+    if (this.trolley) {
+      const trolleyGroup = this.trolley.getGroup();
+      trolleyGroup.rotation.z = 0; // Ensure trolley stays upright
+    }
+  }
   
+  /**
+   * Start bounce animation when hitting a barrier
+   */
+  public startBounce(): void {
+    if (!this.config.effects.bounceOnBarrierHit.enabled || this._isBouncing) {
+      return;
+    }
+
+    console.log('[TrolleyController] Starting bounce animation');
+    
+    this._isBouncing = true;
+    this._bounceStartTime = Date.now() * 0.001;
+    this._bounceStartPosition = this._position.z;
+    this._bounceDirection = -1; // Bounce backward
+    this._speed = 0; // Stop forward movement during bounce
+
+    // Show visual feedback on trolley
+    if (this.trolley) {
+      // Keep trolley upright and add slight shake effect
+      const trolleyGroup = this.trolley.getGroup();
+      trolleyGroup.rotation.z = 0; // Ensure upright
+    }
+  }
+
+  /**
+   * Check if trolley is currently bouncing
+   */
+  public isBouncing(): boolean {
+    return this._isBouncing;
+  }
+
   /**
    * Switch to a specific track
    * Requirement 5.5: Smooth track switching
@@ -416,6 +492,12 @@ export class TrolleyController {
     const sectionLength = this.config.tracks.segmentLength * 2.5;
     this._lastSpeedSectionIndex = Math.floor(this._position.z / sectionLength);
     this._rockingBoostEnabled = false;
+    
+    // Reset bounce state
+    this._isBouncing = false;
+    this._bounceStartTime = 0;
+    this._bounceStartPosition = 0;
+    this._bounceDirection = 0;
     
   // Set X position to current track
     this._position.x = this.trackPositions[this._currentTrack - 1];

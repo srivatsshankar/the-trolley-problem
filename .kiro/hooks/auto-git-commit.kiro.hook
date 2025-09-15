@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Auto Git Commit",
+  "description": "Automatically commits all changes to the git repository whenever any file is updated, ensuring a complete record of all modifications.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A file has been updated. Please commit all changes to the git repository with an appropriate commit message that describes what was modified. Use git add . followed by git commit with a descriptive message. "
+  }
+}
