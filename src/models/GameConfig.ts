@@ -36,6 +36,18 @@ export interface GameConfig {
     pointsPerPersonAvoided: number;
     pointsPerPersonHit: number; // Negative value
   };
+  effects: {
+    bounceOnBarrierHit: {
+      enabled: boolean;
+      force: number; // Bounce back force multiplier
+      duration: number; // Duration of bounce effect in milliseconds
+    };
+    crashEffects: {
+      fireIntensity: number; // Fire particle intensity multiplier
+      fireParticleCount: number; // Number of fire particles
+      fireSize: number; // Size multiplier for fire particles
+    };
+  };
 }
 
 /**
@@ -73,6 +85,18 @@ export const DEFAULT_CONFIG: GameConfig = {
   scoring: {
     pointsPerPersonAvoided: 1,
     pointsPerPersonHit: -1
+  },
+  effects: {
+    bounceOnBarrierHit: {
+      enabled: true,
+      force: 0.3, // Gentle bounce back force
+      duration: 200 // 200ms bounce duration
+    },
+    crashEffects: {
+      fireIntensity: 2.0, // 2x intensity for more dramatic fire
+      fireParticleCount: 150, // More particles for intense fire
+      fireSize: 1.5 // 1.5x larger fire particles
+    }
   }
 };
 
@@ -253,6 +277,23 @@ export class GameConfigManager {
       errors.push('Max visible segments must be at least 1');
     }
 
+    // Validate effects
+    if (this.config.effects.bounceOnBarrierHit.force < 0) {
+      errors.push('Bounce force cannot be negative');
+    }
+    if (this.config.effects.bounceOnBarrierHit.duration < 0) {
+      errors.push('Bounce duration cannot be negative');
+    }
+    if (this.config.effects.crashEffects.fireIntensity <= 0) {
+      errors.push('Fire intensity must be positive');
+    }
+    if (this.config.effects.crashEffects.fireParticleCount < 0) {
+      errors.push('Fire particle count cannot be negative');
+    }
+    if (this.config.effects.crashEffects.fireSize <= 0) {
+      errors.push('Fire size must be positive');
+    }
+
     if (errors.length > 0) {
       throw new Error(`Configuration validation failed: ${errors.join(', ')}`);
     }
@@ -278,6 +319,12 @@ export class GameConfigManager {
     }
     if (updates.scoring) {
       result.scoring = { ...base.scoring, ...updates.scoring };
+    }
+    if (updates.effects) {
+      result.effects = {
+        bounceOnBarrierHit: { ...base.effects.bounceOnBarrierHit, ...updates.effects.bounceOnBarrierHit },
+        crashEffects: { ...base.effects.crashEffects, ...updates.effects.crashEffects }
+      };
     }
 
     return result;

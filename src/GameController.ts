@@ -12,6 +12,10 @@ import { GameConfig, DEFAULT_CONFIG } from './models/GameConfig';
 import { TrackGenerator } from './systems/TrackGenerator';
 import { CameraController } from './systems/CameraController';
 import { TrolleyController } from './systems/TrolleyController';
+import { CollisionManager } from './systems/CollisionManager';
+import { CollisionDetection } from './systems/CollisionDetection';
+import { TrolleyCrashSystem } from './systems/TrolleyCrashSystem';
+import { UIManager } from './systems/UIManager';
 import { GroundSystem } from './systems/GroundSystem';
 import { createTrackStopper } from './models/TrackStopper';
 import { VisualEffectsSystem } from './systems/VisualEffectsSystem';
@@ -35,6 +39,9 @@ export class GameController {
   private trackGenerator: TrackGenerator;
   private cameraController: CameraController;
   private trolleyController: TrolleyController;
+  private collisionManager: CollisionManager | null = null;
+  private crashSystem: TrolleyCrashSystem | null = null;
+  private uiManager: UIManager | null = null;
   private gameConfig: GameConfig;
   private groundSystem: GroundSystem | null = null;
   private visualEffectsSystem: VisualEffectsSystem | null = null;
@@ -167,7 +174,34 @@ export class GameController {
     // Start with sparks disabled; will enable after threshold
     this.visualEffectsSystem.setWheelSparksEnabled(false);
 
-    this.log('Basic scene created with ground, proper track system, track stopper, and trolley');
+    // Initialize crash system
+    this.crashSystem = new TrolleyCrashSystem(this.sceneManager.getScene());
+    const trolley = this.trolleyController.getTrolley();
+    if (trolley) {
+      this.crashSystem.setTrolley(trolley);
+      this.crashSystem.setVisualEffects(this.visualEffectsSystem);
+    }
+
+    // Initialize collision system
+    const collisionDetection = new CollisionDetection();
+    this.collisionManager = new CollisionManager(collisionDetection);
+    this.collisionManager.setCrashSystem(this.crashSystem);
+  // When crash animation completes, transition to Game Over screen
+  this.collisionManager.setCrashCompleteHandler(() => this.showGameOverScreen());
+
+    // Initialize UI system
+    this.uiManager = new UIManager({
+      sceneManager: this.sceneManager,
+      gameState: this.gameState,
+      onPauseGame: () => this.pauseGame(),
+      onResumeGame: () => this.resumeGame(),
+      onRestartGame: () => this.restartGame(),
+      onReturnToMenu: () => this.returnToMenu()
+    });
+    this.uiManager.initialize();
+    this.uiManager.showGameUI();
+
+    this.log('Basic scene created with ground, proper track system, track stopper, trolley, and game systems');
   }
 
 
@@ -194,24 +228,50 @@ export class GameController {
     // Update performance tracking
     this.updatePerformanceTracking(deltaTime);
 
-    // Update trolley movement
+    // Update game systems based on current phase
     if (this.currentPhase === GamePhase.PLAYING) {
-      this.trolleyController.update(deltaTime);
+      // Check if crash animation is playing or game is over
+      const isCrashing = this.collisionManager?.isCrashAnimationPlaying() || false;
+      
+      if (!isCrashing && !this.gameState.isGameOver) {
+        // Update trolley movement only if not crashing
+        this.trolleyController.update(deltaTime);
 
-      const trolleyPosition = this.trolleyController.position;
+        const trolleyPosition = this.trolleyController.position;
 
-      // Update track generation based on trolley position
-      this.trackGenerator.updateGeneration(trolleyPosition);
-      this.trackGenerator.update(deltaTime);
+        // Update track generation based on trolley position
+        this.trackGenerator.updateGeneration(trolleyPosition);
+        this.trackGenerator.update(deltaTime);
 
-  // No forced reset: tracks are generated endlessly; camera continues following
-      // Enable wheel sparks after crossing threshold sections (each section = 2.5 segments)
-      const sectionLength = this.gameConfig.tracks.segmentLength * 2.5;
-      const sectionsPassed = Math.floor(trolleyPosition.z / sectionLength);
-      if (!this.wheelSparksEnabled && sectionsPassed >= 5) {
-        this.visualEffectsSystem?.setWheelSparksEnabled(true);
-        this.wheelSparksEnabled = true;
-        this.log('Wheel sparks enabled after 5 sections');
+        // Process collisions
+        if (this.collisionManager) {
+          // Gather nearby obstacles and people from content managers
+          const contentManager = this.trackGenerator.getContentManager();
+          const obstacleManager = contentManager.getObstacleManager();
+          const peopleManager = contentManager.getPeopleManager();
+
+          const viewDistance = this.gameConfig.rendering.viewDistance;
+          const nearbyObstacles = obstacleManager.getObstaclesNearPosition(trolleyPosition, viewDistance);
+          const nearbyPeople = peopleManager.getPeopleNearPosition(trolleyPosition, viewDistance);
+
+          this.collisionManager.processCollisions(
+            this.trolleyController,
+            nearbyObstacles,
+            nearbyPeople,
+            this.gameState
+          );
+        }
+
+        // Enable wheel sparks after crossing threshold sections (each section = 2.5 segments)
+        const sectionLength = this.gameConfig.tracks.segmentLength * 2.5;
+        const sectionsPassed = Math.floor(trolleyPosition.z / sectionLength);
+        if (!this.wheelSparksEnabled && sectionsPassed >= 5) {
+          this.visualEffectsSystem?.setWheelSparksEnabled(true);
+          this.wheelSparksEnabled = true;
+          this.log('Wheel sparks enabled after 5 sections');
+        }
+      } else {
+        // Crash animation is playing; movement is paused until callback shows Game Over.
       }
     }
 
@@ -227,6 +287,16 @@ export class GameController {
     // Update visual effects
     if (this.visualEffectsSystem) {
       this.visualEffectsSystem.update(deltaTime);
+    }
+
+    // Update collision manager (includes crash system)
+    if (this.collisionManager) {
+      this.collisionManager.update(deltaTime);
+    }
+
+    // Update UI
+    if (this.uiManager) {
+      this.uiManager.update(deltaTime);
     }
 
     // Log status periodically
@@ -296,6 +366,9 @@ export class GameController {
     if (this.currentPhase === GamePhase.PLAYING) {
       this.currentPhase = GamePhase.PAUSED;
       this.gameEngine.pause();
+      if (this.uiManager) {
+        this.uiManager.showPauseUI();
+      }
       this.log('Game paused');
     }
   }
@@ -307,7 +380,76 @@ export class GameController {
     if (this.currentPhase === GamePhase.PAUSED) {
       this.currentPhase = GamePhase.PLAYING;
       this.gameEngine.resume();
+      if (this.uiManager) {
+        this.uiManager.hidePauseUI();
+        this.uiManager.showGameUI();
+      }
       this.log('Game resumed');
+    }
+  }
+
+  /**
+   * Restart the game
+   */
+  public restartGame(): void {
+    this.log('Restarting game...');
+    
+    // Reset game state
+    this.gameState.reset();
+    this.currentPhase = GamePhase.PLAYING;
+    
+    // Reset trolley position
+    this.trolleyController.setPosition(new THREE.Vector3(0, 0, 2));
+    
+    // Reset collision manager
+    if (this.collisionManager) {
+      this.collisionManager.reset();
+    }
+    
+    // Reset crash system
+    if (this.crashSystem) {
+      this.crashSystem.reset();
+    }
+    
+    // Show game UI
+    if (this.uiManager) {
+      this.uiManager.showGameUI();
+    }
+    
+    // Enable camera following
+    const trolleyGroup = this.trolleyController.getTrolleyGroup();
+    if (trolleyGroup) {
+      this.cameraController.setTarget(trolleyGroup);
+    }
+    
+    this.log('Game restarted');
+  }
+
+  /**
+   * Return to main menu
+   */
+  public returnToMenu(): void {
+    this.log('Returning to main menu...');
+    this.currentPhase = GamePhase.MENU;
+    
+    // Hide all UI
+    if (this.uiManager) {
+      this.uiManager.hideAllUI();
+    }
+    
+    // Reset systems
+    this.restartGame();
+  }
+
+  /**
+   * Show game over screen
+   */
+  private showGameOverScreen(): void {
+    this.log('Showing game over screen');
+    this.currentPhase = GamePhase.GAME_OVER;
+    
+    if (this.uiManager) {
+      this.uiManager.showGameOverScreen();
     }
   }
 
@@ -380,6 +522,15 @@ export class GameController {
 
   // Dispose visual effects
   if (this.visualEffectsSystem) this.visualEffectsSystem.dispose();
+
+    // Dispose collision manager
+    if (this.collisionManager) this.collisionManager.dispose();
+
+    // Dispose crash system
+    if (this.crashSystem) this.crashSystem.dispose();
+
+    // Dispose UI manager
+    if (this.uiManager) this.uiManager.dispose();
 
     // Dispose track generator
     if (this.trackGenerator) this.trackGenerator.dispose();

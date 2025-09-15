@@ -18,7 +18,6 @@ export interface CollisionResult {
 
 export interface CollisionConfig {
   trolleyBoundingBoxExpansion: number;
-  collisionTolerance: number;
   enableVisualFeedback: boolean;
 }
 
@@ -31,7 +30,6 @@ export class CollisionDetection {
   constructor(config?: Partial<CollisionConfig>) {
     this.config = {
       trolleyBoundingBoxExpansion: 0.1,
-      collisionTolerance: 0.05,
       enableVisualFeedback: false,
       ...config
     };
@@ -60,28 +58,23 @@ export class CollisionDetection {
     
     for (const obstacle of obstacles) {
       if (this.trolleyBoundingBox.intersectsBox(obstacle.boundingBox)) {
-        // Calculate collision distance for more precise detection
+        // AABB intersection is sufficient to register a collision.
+        // The previous center-distance gate caused false negatives for long objects.
         const trolleyCenter = new THREE.Vector3();
         this.trolleyBoundingBox.getCenter(trolleyCenter);
-        
         const obstacleCenter = obstacle.getCenter();
         const distance = trolleyCenter.distanceTo(obstacleCenter);
+
+        collisions.push({
+          type: 'obstacle',
+          object: obstacle,
+          position: obstacleCenter.clone(),
+          distance
+        });
         
-        // Apply collision tolerance
-        const minDistance = this.getMinCollisionDistance(obstacle);
-        
-        if (distance <= minDistance) {
-          collisions.push({
-            type: 'obstacle',
-            object: obstacle,
-            position: obstacleCenter.clone(),
-            distance
-          });
-          
-          // Show visual feedback if enabled
-          if (this.config.enableVisualFeedback && this.collisionEffects) {
-            this.collisionEffects.showObstacleCollisionEffect(obstacleCenter);
-          }
+        // Show visual feedback if enabled
+        if (this.config.enableVisualFeedback && this.collisionEffects) {
+          this.collisionEffects.showObstacleCollisionEffect(obstacleCenter);
         }
       }
     }
@@ -103,31 +96,25 @@ export class CollisionDetection {
       if (person.isHit) continue; // Skip already hit people
       
       if (this.trolleyBoundingBox.intersectsBox(person.boundingBox)) {
-        // Calculate collision distance for more precise detection
+        // AABB intersection is sufficient: count as a hit
         const trolleyCenter = new THREE.Vector3();
         this.trolleyBoundingBox.getCenter(trolleyCenter);
-        
         const personCenter = person.getCenter();
         const distance = trolleyCenter.distanceTo(personCenter);
+
+        // Mark person as hit
+        person.markAsHit();
         
-        // Apply collision tolerance
-        const minDistance = this.getMinCollisionDistance(person);
+        collisions.push({
+          type: 'person',
+          object: person,
+          position: personCenter.clone(),
+          distance
+        });
         
-        if (distance <= minDistance) {
-          // Mark person as hit
-          person.markAsHit();
-          
-          collisions.push({
-            type: 'person',
-            object: person,
-            position: personCenter.clone(),
-            distance
-          });
-          
-          // Show visual feedback if enabled
-          if (this.config.enableVisualFeedback && this.collisionEffects) {
-            this.collisionEffects.showPersonCollisionEffect(personCenter);
-          }
+        // Show visual feedback if enabled
+        if (this.config.enableVisualFeedback && this.collisionEffects) {
+          this.collisionEffects.showPersonCollisionEffect(personCenter);
         }
       }
     }
@@ -135,14 +122,7 @@ export class CollisionDetection {
     return collisions;
   }
 
-  /**
-   * Get minimum collision distance based on object type and size
-   */
-  private getMinCollisionDistance(object: Obstacle | Person): number {
-    const size = object.getSize();
-    const maxDimension = Math.max(size.width, size.height, (size as any).length || (size as any).depth || 0);
-    return (maxDimension / 2) + this.config.collisionTolerance;
-  }
+  // Distance-based gating removed: AABB intersections are sufficient for gameplay.
 
   /**
    * Set collision effects system for visual feedback
@@ -250,7 +230,6 @@ export class CollisionDetection {
  */
 export const DEFAULT_COLLISION_CONFIG: CollisionConfig = {
   trolleyBoundingBoxExpansion: 0.1,
-  collisionTolerance: 0.05,
   enableVisualFeedback: false
 };
 

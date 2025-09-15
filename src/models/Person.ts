@@ -280,6 +280,13 @@ export class Person {
   }
 
   /**
+   * Check if person is visible
+   */
+  public isVisible(): boolean {
+    return this.group.visible;
+  }
+
+  /**
    * Enable or disable animations
    */
   public setAnimating(animating: boolean): void {

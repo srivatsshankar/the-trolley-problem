@@ -7,6 +7,7 @@
 import { CollisionDetection, CollisionResult } from './CollisionDetection';
 import { CollisionEffects } from './CollisionEffects';
 import { TrolleyController } from './TrolleyController';
+import { TrolleyCrashSystem } from './TrolleyCrashSystem';
 import { GameState } from '../models/GameState';
 import { Obstacle } from '../models/Obstacle';
 import { Person } from '../models/Person';
@@ -14,7 +15,6 @@ import { Person } from '../models/Person';
 export interface CollisionManagerConfig {
   enableVisualEffects: boolean;
   enableAudio: boolean;
-  collisionTolerance: number;
   warningDistance: number;
 }
 
@@ -29,7 +29,9 @@ export interface SegmentCollisionData {
 export class CollisionManager {
   private collisionDetection: CollisionDetection;
   private collisionEffects: CollisionEffects | null = null;
+  private crashSystem: TrolleyCrashSystem | null = null;
   private config: CollisionManagerConfig;
+  private onCrashComplete?: () => void;
   
   // Track collisions per segment
   private currentSegmentCollisions: SegmentCollisionData;
@@ -43,7 +45,6 @@ export class CollisionManager {
     this.config = {
       enableVisualEffects: true,
       enableAudio: false,
-      collisionTolerance: 0.05,
       warningDistance: 2.0,
       ...config
     };
@@ -58,6 +59,20 @@ export class CollisionManager {
     this.collisionEffects = collisionEffects;
     this.collisionDetection.setCollisionEffects(collisionEffects);
     this.collisionDetection.setVisualFeedback(this.config.enableVisualEffects);
+  }
+
+  /**
+   * Set crash system for trolley crash animations
+   */
+  public setCrashSystem(crashSystem: TrolleyCrashSystem): void {
+    this.crashSystem = crashSystem;
+  }
+
+  /**
+   * Set callback to be invoked when crash animation completes
+   */
+  public setCrashCompleteHandler(handler: () => void): void {
+    this.onCrashComplete = handler;
   }
 
   /**
@@ -78,9 +93,14 @@ export class CollisionManager {
       return collisions;
     }
 
+    // If an obstacle was hit, immediately stop the trolley movement
+    if (collisions.some(c => c.type === 'obstacle')) {
+      trolleyController.setSpeed(0);
+    }
+
     // Process each collision
     for (const collision of collisions) {
-      this.processIndividualCollision(collision, gameState);
+      this.processIndividualCollision(collision);
     }
 
     // Update game state with collision results
@@ -92,7 +112,7 @@ export class CollisionManager {
   /**
    * Process an individual collision
    */
-  private processIndividualCollision(collision: CollisionResult, _gameState: GameState): void {
+  private processIndividualCollision(collision: CollisionResult): void {
     if (collision.type === 'obstacle') {
       this.handleObstacleCollision(collision);
     } else if (collision.type === 'person') {
@@ -109,12 +129,17 @@ export class CollisionManager {
     this.currentSegmentCollisions.obstaclesHit++;
     this.currentSegmentCollisions.gameEnded = true;
 
+    // Start crash animation if crash system is available
+    if (this.crashSystem) {
+      this.crashSystem.startCrashAnimation(this.onCrashComplete);
+    }
+
     // Show visual effect if enabled
     if (this.config.enableVisualEffects && this.collisionEffects) {
       this.collisionEffects.showObstacleCollisionEffect(collision.position);
     }
 
-    console.log('Obstacle collision detected - Game Over!');
+    console.log('Obstacle collision detected - Starting crash animation!');
   }
 
   /**
@@ -238,11 +263,6 @@ export class CollisionManager {
     
     // Update collision detection visual feedback
     this.collisionDetection.setVisualFeedback(this.config.enableVisualEffects);
-    
-    // Update collision detection config
-    this.collisionDetection.updateConfig({
-      collisionTolerance: this.config.collisionTolerance
-    });
   }
 
   /**
@@ -260,6 +280,10 @@ export class CollisionManager {
     if (this.collisionEffects) {
       this.collisionEffects.update(deltaTime);
     }
+    
+    if (this.crashSystem) {
+      this.crashSystem.update(deltaTime);
+    }
   }
 
   /**
@@ -271,6 +295,10 @@ export class CollisionManager {
     
     if (this.collisionEffects) {
       this.collisionEffects.clearAllEffects();
+    }
+    
+    if (this.crashSystem) {
+      this.crashSystem.reset();
     }
   }
 
@@ -284,7 +312,18 @@ export class CollisionManager {
       this.collisionEffects.dispose();
     }
     
+    if (this.crashSystem) {
+      this.crashSystem.dispose();
+    }
+    
     this.segmentPeopleTracking.clear();
+  }
+
+  /**
+   * Check if crash animation is currently playing
+   */
+  public isCrashAnimationPlaying(): boolean {
+    return this.crashSystem ? this.crashSystem.isCrashAnimationPlaying() : false;
   }
 }
 
@@ -294,7 +333,6 @@ export class CollisionManager {
 export const DEFAULT_COLLISION_MANAGER_CONFIG: CollisionManagerConfig = {
   enableVisualEffects: true,
   enableAudio: false,
-  collisionTolerance: 0.05,
   warningDistance: 2.0
 };
 

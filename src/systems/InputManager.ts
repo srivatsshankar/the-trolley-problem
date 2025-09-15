@@ -187,6 +187,11 @@ export class InputManager {
     // Update score display with current game state
     this.scoreDisplay.updateScore(this.gameState.score);
 
+    // Don't process section transitions if game is over (e.g., after crash)
+    if (this.gameState.isGameOver) {
+      return;
+    }
+
     // Check trolley position and handle preview/transition logic
     const trolleyPosition = this.trolleyController.position;
     const currentSection = this.trackGenerator.getCurrentSectionIndex(trolleyPosition);
@@ -267,6 +272,7 @@ export class InputManager {
 
   /**
    * Process section entry - check which button is pressed and execute track change immediately
+   * Also handles section completion scoring
    */
   private processSectionEntry(sectionIndex: number): void {
     // Check if we're at a section boundary where track changes can occur
@@ -278,6 +284,9 @@ export class InputManager {
     const tolerance = 1.0;
     if (trolleyPosition.z >= sectionBoundaryZ - tolerance) {
       const currentTrack = this.trolleyController.currentTrack;
+
+      // Process section completion scoring before track change
+      this.processSectionCompletion(sectionIndex - 1); // Previous section just completed
 
       if (this.currentSelectedTrack !== currentTrack) {
         // Make preview solid/opaque before executing the transition
@@ -299,6 +308,36 @@ export class InputManager {
         this.clearCurrentPreview();
         console.log(`[InputManager] No track change needed at section ${sectionIndex}, staying on track ${currentTrack}`);
       }
+    }
+  }
+
+  /**
+   * Process section completion - calculate people hit vs avoided and update score display
+   */
+  private processSectionCompletion(completedSectionIndex: number): void {
+    if (completedSectionIndex < 0) return; // Skip negative sections
+
+    // Get people in the completed section
+    const contentManager = this.trackGenerator.getContentManager();
+    const sectionLength = this.trackGenerator.getSectionLength();
+    const sectionStartZ = completedSectionIndex * sectionLength;
+    const sectionEndZ = (completedSectionIndex + 1) * sectionLength;
+
+    // Get all people in this section
+    const allPeopleInSection = contentManager.getPeopleManager().getPeopleInRange(sectionStartZ, sectionEndZ);
+    const totalPeopleInSection = allPeopleInSection.length;
+
+    // Count people hit in this section (those marked as hit)
+    const peopleHitInSection = allPeopleInSection.filter(person => person.isHit).length;
+    const peopleAvoidedInSection = totalPeopleInSection - peopleHitInSection;
+
+    // Update game state with section results
+    this.gameState.processSegmentCompletion(totalPeopleInSection, peopleHitInSection);
+
+    // Show temporary score changes in the score display
+    if (peopleHitInSection > 0 || peopleAvoidedInSection > 0) {
+      this.scoreDisplay.showSectionCompletion(peopleHitInSection, peopleAvoidedInSection);
+      console.log(`[InputManager] Section ${completedSectionIndex} completed - Hit: ${peopleHitInSection}, Avoided: ${peopleAvoidedInSection}`);
     }
   }
 

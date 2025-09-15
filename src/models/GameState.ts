@@ -76,13 +76,15 @@ export class GameState {
       if (collision.type === 'obstacle') {
         hitBarrier = true;
       }
-      // People collisions are handled at section completion, not here
+      // People collisions are tracked by marking them as hit, but score is not updated until section completion
     }
 
     // End game if barrier was hit (no score change for barriers)
     if (hitBarrier) {
       this.endGame(true);
     }
+
+    // Score is only updated at section completion, not during individual collisions
   }
 
   /**
@@ -95,11 +97,11 @@ export class GameState {
   processSegmentCompletion(totalPeopleInSection: number, peopleHitInSection: number): { peopleHit: number, peopleAvoided: number } {
     const peopleAvoidedInSection = totalPeopleInSection - peopleHitInSection;
     
-    // Update totals
+    // Update totals for both hit and avoided people
     this._peopleHit += peopleHitInSection;
     this._peopleAvoided += peopleAvoidedInSection;
     
-    // Update score: add points for people avoided, subtract for people hit
+    // Update score: add points for people avoided, subtract points for people hit
     this._score += peopleAvoidedInSection - peopleHitInSection;
     
     this.incrementSegment();

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trolley Crash Animation Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            background: #4444FF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #6666FF;
+        }
+        
+        #info {
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <button onclick="startGame()">Start Game</button>
+        <button onclick="triggerCrash()">Trigger Crash</button>
+        <button onclick="resetGame()">Reset</button>
+        
+        <div id="info">
+            <div>Click "Start Game" to begin</div>
+            <div>Click "Trigger Crash" to test crash animation</div>
+            <div>The trolley should:</div>
+            <div>1. Stop immediately</div>
+            <div>2. Stop smoking</div>
+            <div>3. Flicker lights (blue/red)</div>
+            <div>4. Flicker windows (light/dark blue)</div>
+            <div>5. Fall on its side</div>
+            <div>6. Catch fire</div>
+            <div>7. Show game over screen</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { GameController } from './dist/GameController.js';
+        
+        let gameController = null;
+        let isGameRunning = false;
+        
+        // Initialize game
+        async function initGame() {
+            const canvas = document.getElementById('gameCanvas');
+            
+            gameController = new GameController({
+                canvas: canvas,
+                gameConfig: {
+                    rendering: {
+                        cameraFrustumSize: 20
+                    }
+                }
+            });
+            
+            try {
+                await gameController.initialize();
+                gameController.start();
+                console.log('Game initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize game:', error);
+            }
+        }
+        
+        // Start game function
+        window.startGame = function() {
+            if (gameController && !isGameRunning) {
+                gameController.startGame();
+                isGameRunning = true;
+                console.log('Game started');
+            }
+        };
+        
+        // Trigger crash function
+        window.triggerCrash = function() {
+            if (gameController && isGameRunning) {
+                // Simulate obstacle collision
+                const trolleyController = gameController.getTrolleyController();
+                const gameState = gameController.getGameState();
+                
+                // Create fake collision result
+                const fakeCollision = {
+                    type: 'obstacle',
+                    object: { type: 'barrier' },
+                    position: trolleyController.position.clone()
+                };
+                
+                // Process collision to trigger crash
+                gameState.processCollisionResults([fakeCollision]);
+                
+                console.log('Crash triggered - animation should start');
+            }
+        };
+        
+        // Reset game function
+        window.resetGame = function() {
+            if (gameController) {
+                gameController.restartGame();
+                isGameRunning = true;
+                console.log('Game reset');
+            }
+        };
+        
+        // Handle window resize
+        function handleResize() {
+            const canvas = document.getElementById('gameCanvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        
+        // Initialize when page loads
+        initGame();
+    </script>
+</body>
+</html>

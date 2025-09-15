@@ -44,12 +44,13 @@ export class Obstacle {
     // Create group to hold all obstacle parts
     this.group = new THREE.Group();
     
-    // For trolley obstacles, calculate proper Y position like the player trolley
+    // Calculate proper Y position based on obstacle type
     if (this.type === 'trolley') {
       const adjustedPosition = this.calculateTrolleyPosition(this.position);
       this.group.position.copy(adjustedPosition);
     } else {
-      this.group.position.copy(this.position);
+      const adjustedPosition = this.calculateRockPosition(this.position);
+      this.group.position.copy(adjustedPosition);
     }
 
     // Create the main mesh based on obstacle type
@@ -86,6 +87,25 @@ export class Obstacle {
     // Calculate Y position like player trolley
     const railsTop = RAIL_TOP_HEIGHT + RAIL_HALF_HEIGHT;
     const calculatedY = railsTop + HOVER_OFFSET + bodyHalf + wheelHeight;
+    
+    return new THREE.Vector3(basePosition.x, calculatedY, basePosition.z);
+  }
+
+  /**
+   * Calculate proper position for rock obstacles to sit on tracks
+   */
+  private calculateRockPosition(basePosition: THREE.Vector3): THREE.Vector3 {
+    // Railway track constants (should match RailwayTrack.ts and Trolley.ts)
+    const RAIL_TOP_HEIGHT = 0.25; // tieHeight (0.15) + railHeight/2 (0.1)
+    const RAIL_HALF_HEIGHT = 0.1; // Half of rail height
+    
+    // Rock dimensions (from DEFAULT_OBSTACLE_CONFIGS.rock)
+    const rockHalfHeight = this.config.size.height / 2;
+    const HOVER_OFFSET_ROCK = 0.15; // Slight lift above rail surface for visibility
+    
+    // Calculate Y position so rock bottom sits slightly above rail surface
+    const railsTop = RAIL_TOP_HEIGHT + RAIL_HALF_HEIGHT;
+    const calculatedY = railsTop + HOVER_OFFSET_ROCK + rockHalfHeight;
     
     return new THREE.Vector3(basePosition.x, calculatedY, basePosition.z);
   }
@@ -441,12 +461,13 @@ export class Obstacle {
   public setPosition(newPosition: THREE.Vector3): void {
     this.position.copy(newPosition);
     
-    // For trolley obstacles, calculate proper Y position like the player trolley
+    // Calculate proper Y position based on obstacle type
     if (this.type === 'trolley') {
       const adjustedPosition = this.calculateTrolleyPosition(newPosition);
       this.group.position.copy(adjustedPosition);
     } else {
-      this.group.position.copy(newPosition);
+      const adjustedPosition = this.calculateRockPosition(newPosition);
+      this.group.position.copy(adjustedPosition);
     }
     
     this.updateBoundingBox();

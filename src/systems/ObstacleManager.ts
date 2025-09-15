@@ -63,7 +63,7 @@ export class ObstacleManager {
       if (!track) { return; }
 
       // Calculate obstacle position on the track (positioned within section boundaries)
-      const obstaclePosition = this.calculateObstaclePosition(track.position, obstacleType, segmentIndex);
+      const obstaclePosition = this.calculateObstaclePosition(track.position, segmentIndex);
 
       // Create obstacle with alternating type
       const obstacle = createObstacle(obstacleType, obstaclePosition);
@@ -107,8 +107,9 @@ export class ObstacleManager {
 
   /**
    * Calculate obstacle position on a track based on section positioning
+   * Note: Only calculates X/Z coordinates; Y positioning is handled by the Obstacle constructor
    */
-  private calculateObstaclePosition(trackPosition: THREE.Vector3, type: ObstacleType, segmentIndex: number): THREE.Vector3 {
+  private calculateObstaclePosition(trackPosition: THREE.Vector3, segmentIndex: number): THREE.Vector3 {
     const config = this.configManager.getConfig();
     const segmentLength = config.tracks.segmentLength;
 
@@ -125,29 +126,11 @@ export class ObstacleManager {
     // Calculate absolute Z position
     const absoluteZ = sectionStartZ + sectionOffset;
 
-    // Railway track constants (should match RailwayTrack.ts and Trolley.ts)
-    const RAIL_TOP_HEIGHT = 0.25; // tieHeight (0.15) + railHeight/2 (0.1)
-    const RAIL_HALF_HEIGHT = 0.1; // Half of rail height
-    const railsTop = RAIL_TOP_HEIGHT + RAIL_HALF_HEIGHT;
-
-    // Compute Y based on obstacle type
-    let obstacleY: number;
-    if (type === 'trolley') {
-      // Match player trolley base height so wheels are visible above rails
-      const BODY_HALF = 1.0 / 2; // DEFAULT_OBSTACLE_CONFIGS.trolley.size.height
-      const WHEEL_HEIGHT = 0.25; // matches trolley wheel height
-      const HOVER_OFFSET_TROLLEY = 0.50; // significantly increased for much better visibility
-      obstacleY = railsTop + HOVER_OFFSET_TROLLEY + BODY_HALF + WHEEL_HEIGHT;
-    } else {
-      // For rocks, place them sitting ON the rails with proper height
-      const ROCK_HALF_HEIGHT = 1.5 / 2; // DEFAULT_OBSTACLE_CONFIGS.rock.size.height / 2
-      const HOVER_OFFSET_ROCK = 0.25; // Increased from 0.15 for better visibility
-      obstacleY = railsTop + HOVER_OFFSET_ROCK + ROCK_HALF_HEIGHT; // Bottom of rock sits on rail surface + offset
-    }
-
+    // Only provide X/Z coordinates; let Obstacle constructor handle Y positioning
+    // This ensures consistent Y calculation between player trolley and obstacle trolleys
     return new THREE.Vector3(
       trackPosition.x,
-      obstacleY, // Proper hovering height above rails
+      trackPosition.y, // Use track Y as base reference (Obstacle will adjust as needed)
       absoluteZ
     );
   }

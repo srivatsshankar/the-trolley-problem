@@ -72,7 +72,6 @@ export class TrolleyController {
     // Initialize collision detection system
     this.collisionDetection = createCollisionDetection({
       trolleyBoundingBoxExpansion: 0.1,
-      collisionTolerance: 0.05,
       enableVisualFeedback: false
     });
     

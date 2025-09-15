@@ -312,6 +312,22 @@ export class PeopleManager {
   }
 
   /**
+   * Get all people within a Z-coordinate range
+   */
+  public getPeopleInRange(zMin: number, zMax: number): Person[] {
+    const peopleInRange: Person[] = [];
+    
+    this.people.forEach(person => {
+      const personZ = person.getCenter().z;
+      if (personZ >= zMin && personZ <= zMax) {
+        peopleInRange.push(person);
+      }
+    });
+    
+    return peopleInRange;
+  }
+
+  /**
    * Check collision between a bounding box and all people
    */
   public checkCollisionWithPeople(boundingBox: THREE.Box3): Person[] {

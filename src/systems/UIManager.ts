@@ -301,22 +301,27 @@ export class UIManager {
         this.gameOverUIGroup.add(overlay);
         
         // Create game over title
-        const gameOverTitle = this.createTextDisplay('GAME OVER', new THREE.Vector3(0, 4, 1), 48, '#FF4444');
+        const gameOverTitle = this.createTextDisplay('GAME OVER', new THREE.Vector3(0, 5, 1), 48, '#FF4444');
         this.gameOverUIGroup.add(gameOverTitle);
         
         // Create final score display (will be updated when shown)
-        const finalScoreDisplay = this.createTextDisplay('Final Score: 0', new THREE.Vector3(0, 2, 1), 32, '#FFFFFF');
+        const finalScoreDisplay = this.createTextDisplay('Final Score: 0', new THREE.Vector3(0, 3.5, 1), 36, '#FFFFFF');
         finalScoreDisplay.userData = { uiElementId: 'final_score' };
         this.gameOverUIGroup.add(finalScoreDisplay);
         
-        // Create statistics summary (will be updated when shown)
-        const statsDisplay = this.createTextDisplay('', new THREE.Vector3(0, 0, 1), 20, '#CCCCCC');
-        statsDisplay.userData = { uiElementId: 'final_stats' };
-        this.gameOverUIGroup.add(statsDisplay);
+        // Create people hit display (blue text as specified)
+        const peopleHitDisplay = this.createTextDisplay('People Hit: 0', new THREE.Vector3(0, 2, 1), 28, '#4A90E2');
+        peopleHitDisplay.userData = { uiElementId: 'people_hit' };
+        this.gameOverUIGroup.add(peopleHitDisplay);
+        
+        // Create people avoided display (red text as specified)
+        const peopleAvoidedDisplay = this.createTextDisplay('People Avoided: 0', new THREE.Vector3(0, 1, 1), 28, '#E24A4A');
+        peopleAvoidedDisplay.userData = { uiElementId: 'people_avoided' };
+        this.gameOverUIGroup.add(peopleAvoidedDisplay);
         
         // Create action buttons
-        const restartButton = this.createMenuButton('Restart', new THREE.Vector3(-2, -2, 1), () => this.onRestartGame());
-        const menuButton = this.createMenuButton('Main Menu', new THREE.Vector3(2, -2, 1), () => this.onReturnToMenu());
+        const restartButton = this.createMenuButton('Restart', new THREE.Vector3(-2, -1.5, 1), () => this.onRestartGame());
+        const menuButton = this.createMenuButton('Main Menu', new THREE.Vector3(2, -1.5, 1), () => this.onReturnToMenu());
         
         this.gameOverUIGroup.add(restartButton);
         this.gameOverUIGroup.add(menuButton);
@@ -504,16 +509,27 @@ export class UIManager {
      */
     private updateGameOverScreen(): void {
         // Update final score
-        const finalScoreElement = this.gameOverUIGroup.getObjectByName('final_score') as THREE.Mesh;
+        const finalScoreElement = this.gameOverUIGroup.children.find(
+            child => child.userData.uiElementId === 'final_score'
+        ) as THREE.Mesh;
         if (finalScoreElement) {
             this.updateTextDisplay(finalScoreElement, `Final Score: ${this.gameState.score}`, '#FFFFFF');
         }
         
-        // Update final statistics
-        const finalStatsElement = this.gameOverUIGroup.getObjectByName('final_stats') as THREE.Mesh;
-        if (finalStatsElement) {
-            const statsText = `People Hit: ${this.gameState.peopleHit} | People Avoided: ${this.gameState.peopleAvoided} | Segments: ${this.gameState.currentSegment}`;
-            this.updateTextDisplay(finalStatsElement, statsText, '#CCCCCC');
+        // Update people hit (blue text)
+        const peopleHitElement = this.gameOverUIGroup.children.find(
+            child => child.userData.uiElementId === 'people_hit'
+        ) as THREE.Mesh;
+        if (peopleHitElement) {
+            this.updateTextDisplay(peopleHitElement, `People Hit: ${this.gameState.peopleHit}`, '#4A90E2');
+        }
+        
+        // Update people avoided (red text)
+        const peopleAvoidedElement = this.gameOverUIGroup.children.find(
+            child => child.userData.uiElementId === 'people_avoided'
+        ) as THREE.Mesh;
+        if (peopleAvoidedElement) {
+            this.updateTextDisplay(peopleAvoidedElement, `People Avoided: ${this.gameState.peopleAvoided}`, '#E24A4A');
         }
     }
     

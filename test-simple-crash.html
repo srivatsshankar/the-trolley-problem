@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Crash Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #222;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            background: #4444FF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #6666FF;
+        }
+        
+        #status {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="controls">
+        <button onclick="initializeGame()">Initialize Game</button>
+        <button onclick="startPlaying()">Start Playing</button>
+        <button onclick="simulateCrash()">Simulate Crash</button>
+        <button onclick="showGameOver()">Show Game Over</button>
+        
+        <div id="status">
+            <div>Status: Not initialized</div>
+            <div>Instructions:</div>
+            <div>1. Click "Initialize Game" first</div>
+            <div>2. Click "Start Playing" to begin</div>
+            <div>3. Click "Simulate Crash" to test animation</div>
+            <div>4. Click "Show Game Over" to test end screen</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { GameController } from './dist/GameController.js';
+        
+        let gameController = null;
+        let statusDiv = null;
+        
+        function updateStatus(message) {
+            if (!statusDiv) {
+                statusDiv = document.querySelector('#status div');
+            }
+            if (statusDiv) {
+                statusDiv.textContent = `Status: ${message}`;
+            }
+            console.log(`[Status] ${message}`);
+        }
+        
+        // Initialize game
+        window.initializeGame = async function() {
+            try {
+                updateStatus('Initializing...');
+                const canvas = document.getElementById('gameCanvas');
+                
+                gameController = new GameController({
+                    canvas: canvas
+                });
+                
+                await gameController.initialize();
+                gameController.start();
+                
+                updateStatus('Game initialized - ready to start');
+            } catch (error) {
+                console.error('Failed to initialize game:', error);
+                updateStatus(`Error: ${error.message}`);
+            }
+        };
+        
+        // Start playing
+        window.startPlaying = function() {
+            if (!gameController) {
+                updateStatus('Please initialize game first');
+                return;
+            }
+            
+            try {
+                gameController.startGame();
+                updateStatus('Game started - trolley moving');
+            } catch (error) {
+                console.error('Failed to start game:', error);
+                updateStatus(`Error starting: ${error.message}`);
+            }
+        };
+        
+        // Simulate crash
+        window.simulateCrash = function() {
+            if (!gameController) {
+                updateStatus('Please initialize game first');
+                return;
+            }
+            
+            try {
+                // Get game state and simulate obstacle collision
+                const gameState = gameController.getGameState();
+                
+                // Create fake obstacle collision
+                const fakeCollision = [{
+                    type: 'obstacle',
+                    object: { type: 'barrier' },
+                    position: { x: 0, y: 0, z: 0 }
+                }];
+                
+                // Process collision to end game
+                gameState.processCollisionResults(fakeCollision);
+                
+                updateStatus('Crash simulated - animation should play');
+            } catch (error) {
+                console.error('Failed to simulate crash:', error);
+                updateStatus(`Error in crash: ${error.message}`);
+            }
+        };
+        
+        // Show game over screen
+        window.showGameOver = function() {
+            if (!gameController) {
+                updateStatus('Please initialize game first');
+                return;
+            }
+            
+            try {
+                // Manually trigger game over screen
+                const gameState = gameController.getGameState();
+                gameState.endGame(true); // End with barrier hit
+                
+                updateStatus('Game over screen should be visible');
+            } catch (error) {
+                console.error('Failed to show game over:', error);
+                updateStatus(`Error showing game over: ${error.message}`);
+            }
+        };
+        
+        // Handle window resize
+        function handleResize() {
+            const canvas = document.getElementById('gameCanvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        
+        updateStatus('Ready to initialize');
+    </script>
+</body>
+</html>

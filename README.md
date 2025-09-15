@@ -60,6 +60,7 @@ The game uses:
 - Progressive difficulty with speed increases
 - Moral decision-making gameplay mechanics
 - Performance optimized with object pooling and culling
+- **Enhanced Collision Effects**: Bounce-back effect when hitting barriers, improved crash animations with realistic fall physics and intensified fire effects
 
 ## Controls
 
